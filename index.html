@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>원탭 벡터 스튜디오 — AI 이미지를 인쇄용 SVG·EPS·AI로</title>
+<meta name="description" content="ChatGPT·미드저니로 만든 로고·일러스트 PNG/JPG를 초정밀 벡터(SVG·EPS·PDF/AI)로 변환합니다. 배경 투명화, 색상 양자화, 베지어 곡선 피팅, 용량 최적화까지 브라우저에서 무료로." />
+<meta name="theme-color" content="#F3EADD" />
+<meta name="color-scheme" content="light dark" />
+<meta property="og:title" content="원탭 벡터 스튜디오" />
+<meta property="og:description" content="AI가 만든 로고를 인쇄용 벡터로. 클릭 몇 번이면 SVG·EPS·AI 완성." />
+<meta property="og:type" content="website" />
+<link rel="icon" href="favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="tokens.css" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<a class="skip" href="#main">본문으로 바로가기</a>
+
+<header class="topbar">
+  <div class="bar-in">
+    <a class="brand" href="#main" aria-label="원탭 벡터 스튜디오 홈">
+      <svg width="34" height="34" viewBox="0 0 40 40" aria-hidden="true">
+        <rect x="1" y="1" width="38" height="38" rx="4" fill="#33281E"/>
+        <path d="M8 29c0-8 6-14 13-14s11 4 11 9" fill="none" stroke="#F3EADD" stroke-width="2" stroke-linecap="round"/>
+        <rect x="5.5" y="26.5" width="5" height="5" fill="#F3EADD"/>
+        <rect x="29.5" y="21.5" width="5" height="5" fill="#D6A84A"/>
+        <circle cx="21" cy="15" r="2.2" fill="#A8431F"/>
+      </svg>
+      <span class="brand-t">
+        <strong>원탭 벡터 스튜디오</strong>
+        <em>ONE-TAP VECTOR STUDIO</em>
+      </span>
+    </a>
+
+    <nav class="tabs" role="tablist" aria-label="화면">
+      <button class="tab is-on" role="tab" aria-selected="true" aria-controls="view-studio" data-tab="studio">변환</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="view-guide" data-tab="guide">인쇄 가이드</button>
+    </nav>
+
+    <div class="bar-actions">
+      <span class="status" id="runState" aria-live="polite">대기</span>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="다크 모드로 전환" title="라이트/다크">
+        <svg width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><path d="M16.5 12.4A7 7 0 0 1 7.6 3.5a7 7 0 1 0 8.9 8.9z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="btn btn-primary" id="quickSvg" type="button">
+        <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v9m0 0l-3.4-3.4M10 12l3.4-3.4M4 15.6V17h12v-1.4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="lbl">SVG 내려받기</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ══ 변환 ══════════════════════════════════════════════ -->
+<section class="view is-on" id="view-studio" role="tabpanel" aria-label="변환 작업대">
+  <div class="studio">
+
+    <!-- 좌: 설정 -->
+    <aside class="panel panel-in" aria-label="변환 설정">
+
+      <section class="blk">
+        <h2><span>01</span>이미지</h2>
+        <div class="drop" id="drop" role="button" tabindex="0" aria-label="이미지 파일 선택">
+          <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <strong>PNG · JPG · WebP</strong>
+          <small>끌어다 놓거나 눌러서 선택</small>
+        </div>
+        <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" hidden />
+        <div class="samples" id="samples" role="group" aria-label="내장 샘플"></div>
+      </section>
+
+      <section class="blk">
+        <h2><span>02</span>배경</h2>
+        <div class="row">
+          <span class="lab">배경 투명화</span>
+          <select id="bgMode" aria-label="배경 투명화 방식">
+            <option value="edges">가장자리 연결</option>
+            <option value="corners">네 모서리</option>
+            <option value="none">사용 안 함</option>
+          </select>
+        </div>
+        <div class="row"><span class="lab">색 허용 범위</span><span class="val" id="bgTolVal">30</span></div>
+        <input type="range" id="bgTol" min="0" max="80" step="2" value="30" aria-label="배경 색 허용 범위" />
+        <p class="hint">바깥에서 이어진 배경만 지웁니다. 로고 안쪽 흰색은 그대로 남습니다.</p>
+      </section>
+
+      <section class="blk">
+        <h2><span>03</span>색상</h2>
+        <div class="chips" id="colorChips" role="group" aria-label="색상 수 프리셋">
+          <button class="chip" data-colors="2">2색</button>
+          <button class="chip" data-colors="4">4색</button>
+          <button class="chip is-on" data-colors="6">6색</button>
+          <button class="chip" data-colors="8">8색</button>
+          <button class="chip" data-colors="12">12색</button>
+          <button class="chip" data-colors="16">16색</button>
+        </div>
+        <p class="hint" style="margin-top:7px">흑백 로고 <em>2색</em> · 심플 심볼 <em>4~6색</em> · 일러스트 <em>8~16색</em></p>
+        <div class="swatches" id="palette" aria-label="추출된 팔레트"></div>
+      </section>
+
+      <section class="blk">
+        <h2><span>04</span>잡티 · 정밀도</h2>
+        <div class="row"><span class="lab">잡티 제거</span><span class="val" id="minAreaVal">8 px²</span></div>
+        <input type="range" id="minArea" min="0" max="60" step="1" value="8" aria-label="잡티 최소 면적" />
+        <div class="row"><span class="lab">곡선 단순화</span><span class="val" id="simplifyVal">0.8</span></div>
+        <input type="range" id="simplify" min="0.2" max="3" step="0.1" value="0.8" aria-label="단순화 강도" />
+        <p class="hint" id="simplifyHint">왼쪽은 초정밀, 오른쪽은 가벼움.</p>
+        <div class="row">
+          <span class="lab">작업 해상도</span>
+          <select id="maxSide" aria-label="작업 해상도">
+            <option value="1600">1600 px</option>
+            <option value="1200" selected>1200 px</option>
+            <option value="900">900 px</option>
+            <option value="700">700 px</option>
+          </select>
+        </div>
+      </section>
+    </aside>
+
+    <!-- 중앙: 비교 -->
+    <section class="stage" aria-label="원본과 벡터 비교">
+      <div class="progress" id="progress"></div>
+      <div class="stage-bar">
+        <div class="seg-sm" id="viewMode" role="group" aria-label="보기 방식">
+          <button data-mode="side" class="is-on">나란히</button>
+          <button data-mode="overlay">겹쳐보기</button>
+          <button data-mode="vector">벡터만</button>
+        </div>
+        <label class="toggle"><input type="checkbox" id="showPaths" /> 경로 보기</label>
+        <label class="toggle"><input type="checkbox" id="plainBg" /> 흰 배경</label>
+        <div class="zoom" role="group" aria-label="확대">
+          <span class="lab">확대</span>
+          <div class="seg-sm" id="zoomBtns">
+            <button data-zoom="fit" class="is-on">맞춤</button>
+            <button data-zoom="1">100%</button>
+            <button data-zoom="2">200%</button>
+            <button data-zoom="4">400%</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="compare" id="compare">
+        <div class="pane" id="paneOrig">
+          <span class="pane-tag">원본</span>
+          <div class="zoombox" id="zoomOrig"><canvas id="origCanvas"></canvas><div class="overlay" id="overlayLayer"></div></div>
+        </div>
+        <div class="pane" id="paneVec">
+          <span class="pane-tag">벡터</span>
+          <div class="zoombox" id="zoomVec"><div id="vecHolder"></div></div>
+        </div>
+        <div class="empty" id="emptyState">
+          <div>
+            <h3>이미지를 놓아 주세요</h3>
+            <p>AI로 만든 로고나 일러스트를 넣으면, 오른쪽에 같은 그림의 벡터가 그 자리에서 만들어집니다.</p>
+          </div>
+        </div>
+      </div>
+
+      <dl class="stats" id="stats">
+        <div class="stat"><dt>앵커 노드</dt><dd id="stAnchors">–</dd></div>
+        <div class="stat"><dt>패스</dt><dd id="stPaths">–</dd></div>
+        <div class="stat"><dt>SVG 용량</dt><dd id="stSize">–</dd></div>
+        <div class="stat"><dt>색상</dt><dd id="stColors">–</dd></div>
+        <div class="stat is-accent"><dt>노드 감소</dt><dd id="stReduction">–</dd></div>
+        <div class="stat"><dt>처리 시간</dt><dd id="stTime">–</dd></div>
+      </dl>
+    </section>
+
+    <!-- 우: 내보내기 -->
+    <aside class="panel panel-out" aria-label="내보내기">
+      <section class="blk">
+        <h2><span>05</span>내보내기</h2>
+        <div class="fmts" id="fmts">
+          <button class="fmt is-primary" data-fmt="svg" type="button">
+            <span class="tag">SVG</span>
+            <span class="m"><b>벡터 SVG</b><span>웹·피그마·일러스트 즉시 사용</span></span>
+            <span class="sz" data-size="svg">–</span>
+          </button>
+          <button class="fmt" data-fmt="eps" type="button">
+            <span class="tag">EPS</span>
+            <span class="m"><b>인쇄용 EPS</b><span>PostScript Level 2 · 인쇄소 표준</span></span>
+            <span class="sz" data-size="eps">–</span>
+          </button>
+          <button class="fmt" data-fmt="ai" type="button">
+            <span class="tag">AI</span>
+            <span class="m"><b>일러스트레이터 AI</b><span>PDF 호환 벡터 스트림</span></span>
+            <span class="sz" data-size="ai">–</span>
+          </button>
+          <button class="fmt" data-fmt="pdf" type="button">
+            <span class="tag">PDF</span>
+            <span class="m"><b>인쇄용 PDF</b><span>PDF 1.4 · 시안 공유용</span></span>
+            <span class="sz" data-size="pdf">–</span>
+          </button>
+        </div>
+
+        <div class="row" style="margin-top:12px"><span class="lab">파일 이름</span></div>
+        <input type="text" id="fileName" value="my-logo" spellcheck="false" aria-label="파일 이름" />
+
+        <div class="row">
+          <span class="lab">좌표 소수점</span>
+          <div class="seg" id="digitSeg" style="width:118px">
+            <button data-digits="1">1</button>
+            <button data-digits="2" class="is-on">2</button>
+            <button data-digits="3">3</button>
+          </div>
+        </div>
+        <div class="opt-row">
+          <span class="lab">CMYK로 변환</span>
+          <label class="toggle"><input type="checkbox" id="cmyk" /> EPS·AI·PDF</label>
+        </div>
+        <p class="note"><b>인쇄 전 확인</b> · CMYK는 프로파일 없는 단순 변환입니다. 최종 인쇄는 인쇄소의 색 관리(RIP)에서 한 번 더 맞추세요.</p>
+      </section>
+
+      <section class="blk">
+        <h2><span>06</span>현재 파일</h2>
+        <div id="fileInfo" class="hint">아직 이미지가 없습니다.</div>
+        <div class="swatches" id="palette2" style="margin-top:10px"></div>
+        <p class="hint" style="margin-top:10px" id="bgInfo"></p>
+      </section>
+    </aside>
+  </div>
+</section>
+
+<!-- ══ 가이드 ═══════════════════════════════════════════ -->
+<section class="view" id="view-guide" role="tabpanel" aria-label="인쇄 가이드">
+  <article class="guide">
+    <header class="guide-head">
+      <div class="kick">PRINT GUIDE</div>
+      <h1>AI 이미지를 인쇄소에 넘기기 전에</h1>
+      <p>화면에서 예쁘게 보이는 PNG와, 인쇄기가 300dpi로 찍어내는 벡터는 다릅니다. 이 도구가 무엇을 만들어 주고, 무엇은 인쇄소에서 마무리해야 하는지 정리했습니다.</p>
+    </header>
+
+    <h2>1 · 이 도구가 하는 일</h2>
+    <p>래스터(PNG·JPG)를 <b>색 영역별 윤곽선</b>으로 바꾸고, 그 윤곽선을 <b>3차 베지어 곡선</b>으로 다시 그립니다. 결과는 픽셀이 아니라 수학이라, 명함이든 현수막이든 확대해도 계단이 생기지 않습니다.</p>
+    <table class="tbl">
+      <thead><tr><th>단계</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td>배경</td><td>바깥에서 이어진 배경색만 투명으로. 안쪽 흰색은 보존.</td></tr>
+        <tr><td>색상</td><td>Median-Cut + K-means로 팔레트를 뽑고 픽셀을 배정.</td></tr>
+        <tr><td>잡티</td><td>지정 면적보다 작은 색 섬을 주변색에 흡수.</td></tr>
+        <tr><td>윤곽</td><td>안티에일리어싱 혼합비를 이용한 서브픽셀 등고선.</td></tr>
+        <tr><td>곡선</td><td>코너는 꺾고, 곡선 구간은 최소제곱 베지어로 피팅.</td></tr>
+        <tr><td>정리</td><td>Douglas–Peucker 단순화 + 좌표 반올림 + 색상별 패스 병합.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>2 · 포맷별 차이</h2>
+    <table class="tbl">
+      <thead><tr><th>포맷</th><th>쓰는 곳</th></tr></thead>
+      <tbody>
+        <tr><td>SVG</td><td>웹, 피그마, 일러스트레이터, 커팅기(레이저·플로터). 외부 참조 없는 단일 파일.</td></tr>
+        <tr><td>EPS</td><td>인쇄소가 가장 편하게 받는 벡터. PostScript Level 2, BoundingBox 포함.</td></tr>
+        <tr><td>AI</td><td>Adobe Illustrator에서 여는 파일. <b>PDF 호환 벡터 스트림</b> 방식이라 일러스트레이터에서 그대로 열리고 편집됩니다.</td></tr>
+        <tr><td>PDF</td><td>시안 공유·교정용. PDF 1.4, 텍스트 없이 순수 벡터만.</td></tr>
+      </tbody>
+    </table>
+    <p class="hint">AI 파일은 별도 전용 포맷이 아니라, 일러스트레이터가 읽을 수 있는 PDF 벡터 스트림을 <code>.ai</code> 확장자로 저장한 것입니다. 일러스트레이터에서 열면 일반 벡터 오브젝트로 인식됩니다.</p>
+
+    <h2>3 · 좋은 결과를 얻는 순서</h2>
+    <ol>
+      <li><b>원본은 크게</b> — 1000px 이상으로 넣을수록 윤곽이 정확합니다. 작은 원본은 확대하지 말고 다시 생성하세요.</li>
+      <li><b>색상 수를 줄여서 시작</b> — 로고라면 2~4색. 색이 많을수록 파일이 커지고 미세 잡티도 늘어납니다.</li>
+      <li><b>배경을 먼저 지우기</b> — 배경이 남아 있으면 그 사각형까지 하나의 도형이 되어 용량을 잡아먹습니다.</li>
+      <li><b>잡티를 올려서 정리</b> — JPEG 압축 잡티가 많다면 10~20px²까지 올려 보세요.</li>
+      <li><b>곡선 단순화는 마지막에</b> — 200%로 확대해 원본과 비교하며, 눈에 띄지 않는 가장 큰 값에서 멈춥니다.</li>
+    </ol>
+
+    <h2>4 · 인쇄 전 체크리스트</h2>
+    <ul>
+      <li><b>CMYK</b> — 화면의 RGB 빨강은 인쇄에서 탁해집니다. 이 도구의 CMYK 변환은 근사치이므로, 최종 색은 인쇄소 색 관리에서 확인하세요.</li>
+      <li><b>최소 선 굵기</b> — 0.25pt 이하 얇은 선은 인쇄에서 사라질 수 있습니다.</li>
+      <li><b>여백</b> — 재단선 기준 3mm 이상 안쪽으로.</li>
+      <li><b>검정</b> — 큰 면적은 K100, 작은 글자는 K100이 안전합니다. 4색 검정은 번짐 위험.</li>
+      <li><b>투명도</b> — 이 도구는 반투명을 쓰지 않고 색을 나눠 칠합니다. RIP에서 투명도 평탄화 문제가 생기지 않습니다.</li>
+    </ul>
+
+    <h2>5 · 이런 경우엔 결과가 다릅니다</h2>
+    <ul>
+      <li><b>사진</b> — 사진은 벡터화해도 사진처럼 보이지 않습니다. 색면 일러스트로 바뀝니다.</li>
+      <li><b>그라데이션</b> — 색 단계로 근사합니다. 부드러운 그라데이션은 띠가 보일 수 있습니다.</li>
+      <li><b>아주 작은 글자</b> — 12px 이하 글자는 뭉개집니다. 텍스트는 일러스트레이터에서 다시 입력하는 편이 좋습니다.</li>
+      <li><b>반투명 그림자</b> — 불투명 색면으로 바뀝니다.</li>
+    </ul>
+
+    <h2>6 · 개인정보</h2>
+    <p>이미지는 <b>브라우저 안에서만</b> 처리됩니다. 서버로 전송되지 않고, 어디에도 저장되지 않습니다. 탭을 닫으면 사라집니다. 자세한 내용은 <a href="privacy.html">개인정보 처리방침</a>을 보세요.</p>
+  </article>
+</section>
+
+</main>
+
+<footer class="foot">
+  <span>원탭 벡터 스튜디오</span>
+  <span>100% 브라우저 처리 · 서버 전송 없음</span>
+  <a href="privacy.html">개인정보 처리방침</a>
+  <span style="margin-left:auto">CMYK 변환은 근사치입니다</span>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="core.js"></script>
+<script src="samples.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
