@@ -28,6 +28,23 @@
     lastRun: 0
   };
 
+  /* ── 테마 · 투명도 설정 ─────────────────────────────── */
+  function setTheme(theme) {
+    var t = theme === 'light' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    var btn = $('themeBtn');
+    if (btn) {
+      btn.setAttribute('aria-label', t === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환');
+      btn.setAttribute('aria-pressed', t === 'light' ? 'true' : 'false');
+    }
+    try { localStorage.setItem('ovs.theme', t); } catch (e) { /* 저장소를 못 쓰는 환경 */ }
+  }
+
+  function syncTransparency() {
+    var q = window.matchMedia ? window.matchMedia('(prefers-reduced-transparency: reduce)') : null;
+    document.documentElement.setAttribute('data-transparency', q && q.matches ? 'reduce' : 'full');
+  }
+
   /* ── 저장/복원 ─────────────────────────────────────── */
   function load() {
     try {
@@ -220,9 +237,9 @@
     var r = Math.max(1.1, Math.min(w, h) / 400);
     Array.prototype.forEach.call(svg.querySelectorAll('path'), function (p, pi) {
       p.setAttribute('fill', 'none');
-      p.setAttribute('stroke', '#A8431F');
+      p.setAttribute('stroke', '#C4B5FD');
       p.setAttribute('stroke-width', String(Math.max(0.5, r * 0.35)));
-      p.setAttribute('stroke-opacity', '0.85');
+      p.setAttribute('stroke-opacity', '0.9');
       var d = p.getAttribute('d') || '';
       var tokens = d.match(/[MLCZ]|-?\d*\.?\d+/g) || [];
       var i = 0, cmd = '';
@@ -247,8 +264,8 @@
       c.setAttribute('cx', String(x));
       c.setAttribute('cy', String(y));
       c.setAttribute('r', String(rr));
-      c.setAttribute('fill', kind === 'solid' ? '#A8431F' : '#FFFCF6');
-      c.setAttribute('stroke', '#A8431F');
+      c.setAttribute('fill', kind === 'solid' ? '#34E0C8' : '#06070B');
+      c.setAttribute('stroke', kind === 'solid' ? '#34E0C8' : '#C4B5FD');
       c.setAttribute('stroke-width', String(Math.max(0.4, rr * 0.45)));
       parent.appendChild(c);
     }
@@ -474,11 +491,10 @@
       });
     });
 
-    // 테마
+    // 테마 — 기본은 다크 글래스, 라이트는 선택 옵션
     $('themeBtn').addEventListener('click', function () {
-      var dark = document.documentElement.getAttribute('data-theme') === 'dark';
-      document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark');
-      try { localStorage.setItem('ovs.theme', dark ? 'light' : 'dark'); } catch (e) {}
+      var dark = document.documentElement.getAttribute('data-theme') !== 'light';
+      setTheme(dark ? 'light' : 'dark');
     });
 
     // 업로드
@@ -582,10 +598,15 @@
 
   /* ── 시작 ──────────────────────────────────────────── */
   function init() {
-    try {
-      var th = localStorage.getItem('ovs.theme');
-      if (th === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-    } catch (e) {}
+    var th = 'dark';
+    try { th = localStorage.getItem('ovs.theme') === 'light' ? 'light' : 'dark'; } catch (e) { /* noop */ }
+    setTheme(th);
+    syncTransparency();
+    if (window.matchMedia) {
+      var mq = window.matchMedia('(prefers-reduced-transparency: reduce)');
+      if (mq.addEventListener) mq.addEventListener('change', syncTransparency);
+      else if (mq.addListener) mq.addListener(syncTransparency);
+    }
     load();
     buildSamples();
     bind();

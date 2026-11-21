@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="ko" data-theme="light">
+<html lang="ko" data-theme="dark">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>원탭 벡터 스튜디오 — AI 이미지를 인쇄용 SVG·EPS·AI로</title>
 <meta name="description" content="ChatGPT·미드저니로 만든 로고·일러스트 PNG/JPG를 초정밀 벡터(SVG·EPS·PDF/AI)로 변환합니다. 배경 투명화, 색상 양자화, 베지어 곡선 피팅, 용량 최적화까지 브라우저에서 무료로." />
-<meta name="theme-color" content="#F3EADD" />
-<meta name="color-scheme" content="light dark" />
+<meta name="theme-color" content="#06070B" />
+<meta name="color-scheme" content="dark light" />
 <meta property="og:title" content="원탭 벡터 스튜디오" />
 <meta property="og:description" content="AI가 만든 로고를 인쇄용 벡터로. 클릭 몇 번이면 SVG·EPS·AI 완성." />
 <meta property="og:type" content="website" />
@@ -20,13 +20,13 @@
 <header class="topbar">
   <div class="bar-in">
     <a class="brand" href="#main" aria-label="원탭 벡터 스튜디오 홈">
-      <svg width="34" height="34" viewBox="0 0 40 40" aria-hidden="true">
-        <rect x="1" y="1" width="38" height="38" rx="4" fill="#33281E"/>
-        <path d="M8 29c0-8 6-14 13-14s11 4 11 9" fill="none" stroke="#F3EADD" stroke-width="2" stroke-linecap="round"/>
-        <rect x="5.5" y="26.5" width="5" height="5" fill="#F3EADD"/>
-        <rect x="29.5" y="21.5" width="5" height="5" fill="#D6A84A"/>
-        <circle cx="21" cy="15" r="2.2" fill="#A8431F"/>
-      </svg>
+      <span class="mark" aria-hidden="true">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+          <path d="M4 17.5C4 11 9.4 5.6 15.6 5.6H20" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+          <rect x="1.6" y="15.2" width="4.6" height="4.6" rx="1" fill="#34E0C8" stroke="#06070B" stroke-width="1"/>
+          <rect x="17.8" y="3.4" width="4.6" height="4.6" rx="1" fill="#FFFFFF" stroke="#06070B" stroke-width="1"/>
+        </svg>
+      </span>
       <span class="brand-t">
         <strong>원탭 벡터 스튜디오</strong>
         <em>ONE-TAP VECTOR STUDIO</em>
@@ -40,8 +40,9 @@
 
     <div class="bar-actions">
       <span class="status" id="runState" aria-live="polite">대기</span>
-      <button class="icon-btn" id="themeBtn" type="button" aria-label="다크 모드로 전환" title="라이트/다크">
-        <svg width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><path d="M16.5 12.4A7 7 0 0 1 7.6 3.5a7 7 0 1 0 8.9 8.9z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="라이트 모드로 전환" aria-pressed="false" title="다크/라이트 전환">
+        <svg class="icon-moon" width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><path d="M16.5 12.4A7 7 0 0 1 7.6 3.5a7 7 0 1 0 8.9 8.9z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        <svg class="icon-sun" width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 2v2.2M10 15.8V18M2 10h2.2M15.8 10H18M4.4 4.4l1.6 1.6M14 14l1.6 1.6M15.6 4.4L14 6M6 14l-1.6 1.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
       </button>
       <button class="btn btn-primary" id="quickSvg" type="button">
         <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v9m0 0l-3.4-3.4M10 12l3.4-3.4M4 15.6V17h12v-1.4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -152,6 +153,9 @@
         </div>
         <div class="empty" id="emptyState">
           <div>
+            <span class="empty-ico" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 16.5V4.5m0 0L7 9.5m5-5l5 5" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 15.5v3A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5v-3" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round"/></svg>
+            </span>
             <h3>이미지를 놓아 주세요</h3>
             <p>AI로 만든 로고나 일러스트를 넣으면, 오른쪽에 같은 그림의 벡터가 그 자리에서 만들어집니다.</p>
           </div>

@@ -152,10 +152,10 @@ LD_LIBRARY_PATH=/workspace/scratch/chromelibs:/workspace/scratch/calc/libs \
 - 콘솔 에러 0 · 외부 요청 0 · 가로 넘침 0 (데스크톱/모바일)
 - 샘플 3종 변환 → 노드·패스·용량 통계
 - PNG 업로드 → 변환 → 슬라이더 조절 시 노드·용량 감소
-- 200%/400% 확대 비교 · 겹쳐보기 · 경로(노드) 보기
+- 100%/200%/400% 확대 비교 · 겹쳐보기 · 경로(노드) 보기
 - **SVG 를 실제로 래스터화해 원본과 픽셀 비교** (평균 오차 기준)
 - SVG/EPS/AI/PDF 다운로드 → 파일 헤더·구조·pypdf 파싱 검증
-- 모바일 레이아웃 · 다크 모드 · 가이드 화면
+- C안 토큰(캔버스 #06070B · 글래스 .05/.11 · 바이올렛/민트 · 축소 투명도 폴백) · 모바일 레이아웃 · 라이트 모드 · 가이드 화면
 
 ---
 
@@ -187,3 +187,27 @@ LD_LIBRARY_PATH=/workspace/scratch/chromelibs:/workspace/scratch/calc/libs \
 
 Canvas 2D + ES5 문법 + `Map`/`Uint8ClampedArray`. Chrome·Edge·Safari·Firefox 최신 버전.
 `localStorage` 를 못 쓰는 환경(사생활 보호 모드)에서도 동작합니다(설정 저장만 생략).
+
+---
+
+## 9. 디자인 시스템 — C안 Dark Glass Studio
+
+화면의 기본값은 **다크 글래스**입니다. 라이트 모드는 헤더의 해·달 버튼으로 켜는 선택 옵션이며,
+선택은 `localStorage`(`ovs.theme`)에 남습니다.
+
+| 토큰 | 값 | 쓰는 곳 |
+|---|---|---|
+| `--pm-canvas` | `#06070B` | 화면 바닥 |
+| `--pm-glass` | `rgba(255,255,255,.05)` | 카드·패널 바탕 |
+| `--pm-edge` | `rgba(255,255,255,.11)` | 카드 1px 보더 |
+| `--pm-violet` | `#8B5CF6` | 상태·액션(활성 탭, 선택 칩, 경로) |
+| `--pm-teal` | `#34E0C8` | 성공·수치(완료 상태, 노드 감소, 섹션 번호) |
+| `--pm-opaque` | `#14151B` | 투명도 줄이기 폴백 |
+
+- 글로우는 화면당 2~3개(상단 바이올렛, 우상단 민트, 하단 핑크)만 두고, 카드마다 넣지 않습니다.
+- blur는 상단 바·패널 태그·토스트 같은 **짧은 크롬**에만 씁니다. 긴 목록·표는 불투명 배경입니다.
+- `prefers-reduced-transparency: reduce` 또는 `data-transparency="reduce"`에서 유리면은 `#14151B`로,
+  `backdrop-filter`는 해제됩니다. `prefers-reduced-motion: reduce`에서는 진행 바 애니메이션이 멈춥니다.
+- 원본/벡터 비교 캔버스는 **투명 체커보드**가 기본이고, `흰 배경` 토글은 인쇄 확인용 흰 시트로 바뀝니다.
+- 폰트는 로컬 woff2(PlexKR)만 사용하고 아이콘은 인라인 SVG입니다. 외부 요청은 0건입니다.
+
