@@ -56,7 +56,11 @@
 
 <!-- ══ 변환 ══════════════════════════════════════════════ -->
 <section class="view is-on" id="view-studio" role="tabpanel" aria-label="변환 작업대">
-  <div class="studio">
+  <div class="studio studio--titled">
+    <header class="view-head">
+      <h1>이미지 → SVG 벡터 변환</h1>
+      <p>AI로 만든 로고·일러스트를 넣으면 브라우저 안에서 경로를 따라 다시 그려 인쇄용 SVG로 바꿉니다.</p>
+    </header>
 
     <!-- 좌: 설정 -->
     <aside class="panel panel-in" aria-label="변환 설정">
@@ -68,7 +72,7 @@
           <strong>PNG · JPG · WebP</strong>
           <small>끌어다 놓거나 눌러서 선택</small>
         </div>
-        <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" hidden />
+        <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" aria-label="변환할 이미지 파일 선택" hidden />
         <div class="samples" id="samples" role="group" aria-label="내장 샘플"></div>
       </section>
 

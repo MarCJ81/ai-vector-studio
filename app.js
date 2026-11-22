@@ -214,10 +214,17 @@
     ctx.putImageData(new ImageData(new Uint8ClampedArray(S.source.data), S.source.width, S.source.height), 0, 0);
   }
 
+  /** 같은 SVG를 두 번 넣을 때 id가 겹치지 않게 접두사를 붙인다(참조 url(#id)도 같이). */
+  function uniqueIds(svg, prefix) {
+    return String(svg || '')
+      .replace(/\sid="([^"]+)"/g, function (m, id) { return ' id="' + prefix + '-' + id + '"'; })
+      .replace(/url\(#([^\)]+)\)/g, function (m, id) { return 'url(#' + prefix + '-' + id + ')'; });
+  }
+
   function renderVector() {
     var holder = $('vecHolder');
     holder.innerHTML = S.out.svg || '';
-    $('overlayLayer').innerHTML = S.out.svg || '';
+    $('overlayLayer').innerHTML = uniqueIds(S.out.svg, 'ov');
     var svg = holder.querySelector('svg');
     if (!svg) return;
     svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
