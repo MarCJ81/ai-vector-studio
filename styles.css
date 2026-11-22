@@ -761,7 +761,7 @@ html[data-theme="light"] .toast { background: rgba(12, 13, 15, .92); }
   .panel-in, .panel-out { position: static; max-height: none; }
   .stage { order: -1; height: auto; min-height: 0; }
   .studio--titled .stage { height: auto; }
-  .view-head { margin-top: 0; gap: 3px; }
+  .view-head { order: -2; margin-top: 0; gap: 3px; }
   .view-head h1 { font-size: 17px; }
   .view-head p { font-size: 11.5px; }
   .compare { grid-template-columns: 1fr; grid-auto-rows: minmax(220px, 42vh); }
