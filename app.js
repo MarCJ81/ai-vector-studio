@@ -321,9 +321,12 @@
 
   function renderPalette() {
     if (!S.result) return;
-    var html = S.result.layers.map(function (L) {
-      return '<span class="sw" style="background:' + L.hex + '" title="' + L.hex + ' · ' + L.anchors + ' 노드"></span>';
-    }).join('');
+    var seen = {}, html = '';
+    S.result.layers.forEach(function (L) {
+      if (seen[L.hex]) return;                      // 같은 색은 한 번만 (레이어는 도형 단위)
+      seen[L.hex] = 1;
+      html += '<span class="sw" style="background:' + L.hex + '" title="' + L.hex + ' · ' + L.anchors + ' 노드"></span>';
+    });
     $('palette').innerHTML = html;
     $('palette2').innerHTML = html;
   }
