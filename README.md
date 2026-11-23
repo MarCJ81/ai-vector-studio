@@ -70,8 +70,8 @@ AI가 만든 로고는 대부분 1024×1024 PNG입니다. 명함(300dpi)에 쓰�
 | 엔진 | 별 | 라이선스 | 브라우저 실행 | 이 앱에서의 역할 |
 |---|---|---|---|---|
 | **visioncortex/vtracer** | 7.5k | MIT OR Apache-2.0 | WASM (668KB) | 채택 — 윤곽·곡선 추적 |
-| jankovicsandras/imagetracerjs | 1.6k | Unlicense | JS | 미채택 — 작은 글자에서 계단이 남음 |
-| potrace | 4k+ | GPL-2.0 | WASM | 미채택 — GPL 전염, 다색은 후처리 필요 |
+| jankovicsandras/imagetracerjs | 1.55k | Unlicense | JS | 미채택 — 작은 글자에서 계단이 남음 |
+| potrace (원본 SourceForge / kilobtye JS 포팅) | 347 (포팅) | GPL-2.0 | WASM/JS | 미채택 — GPL, 흑백 전용이라 다색은 후처리 필요 |
 
 작은 로고(90×41px) 실측 — 같은 원본을 다시 래스터화해 비교:
 
