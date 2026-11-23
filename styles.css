@@ -481,6 +481,18 @@ input[type="range"]:focus-visible { outline: 2px solid var(--focus); outline-off
   display: flex; border: 1px solid var(--edge); border-radius: 8px; overflow: hidden;
   background: var(--glass);
 }
+.seg-wide { width: 100%; margin-bottom: 2px; }
+.seg-wide button { flex: 1 1 0; padding: 7px 4px; font-size: 12px; font-weight: 600; }
+.engine-badge {
+  margin: 8px 0 0; font-size: 11px; letter-spacing: .01em; color: var(--ink-dim);
+  display: flex; align-items: center; gap: 6px;
+}
+.engine-badge::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--ink-dim); opacity: .8;
+}
+.engine-badge.is-precise { color: var(--ok); }
+.engine-badge.is-precise::before { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 .seg button {
   flex: 1; height: 30px; font-size: 12px; font-weight: 600; color: var(--ink-3);
   background: transparent; border-right: 1px solid var(--hairline);

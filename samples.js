@@ -14,8 +14,40 @@
   var LIST = [
     { id: 'emblem', name: '심플 엠블럼', colors: 2, note: '2색 · 또렷한 선' },
     { id: 'badge', name: '다색 뱃지', colors: 6, note: '6색 · 면 분할' },
-    { id: 'mascot', name: 'AI 마스코트', colors: 12, note: '12색 · 잡티 포함' }
+    { id: 'mascot', name: 'AI 마스코트', colors: 12, note: '12색 · 잡티 포함' },
+    { id: 'wordmark', name: '미니 로고', colors: 4, note: '90×41px · 저해상도 글자', w: 90, h: 41 }
   ];
+
+  /* ── 4. 미니 로고 (90×41px) ──────────────────────────
+     "작은 로고 글자가 뭉개진다"를 재현하는 샘플.
+     실제 저해상도 로고처럼 90×41 캔버스에 바로 그려
+     안티에일리어싱 경계만 남긴다. */
+  function drawWordmark() {
+    var c = document.createElement('canvas');
+    c.width = 90; c.height = 41;
+    var ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, 90, 41);
+    ctx.textBaseline = 'alphabetic';
+    try {
+      ctx.font = '700 30px PlexKR, "Helvetica Neue", Arial, sans-serif';
+      ctx.fillStyle = '#2E1D18';
+      ctx.fillText('no', 2, 32);
+      var w1 = ctx.measureText('no').width;
+      ctx.fillStyle = '#E20026';
+      ctx.fillText('va', 2 + w1 + 2, 32);
+    } catch (e) { /* 폰트를 못 쓰는 환경 */ }
+    return c;
+  }
+
+  function wordmarkThumb(size) {
+    var c = canvasOf(size || 160);
+    var ctx = c.getContext('2d');
+    var mini = drawWordmark();
+    var k = Math.min(c.width / mini.width * 0.86, c.height / mini.height * 0.52);
+    var w = mini.width * k, h = mini.height * k;
+    ctx.drawImage(mini, (c.width - w) / 2, (c.height - h) / 2, w, h);
+    return c;
+  }
 
   function rng(seed) {
     var s = seed >>> 0;
@@ -209,6 +241,7 @@
 
   /** 새 캔버스에 샘플을 그려 반환 */
   function draw(id, size) {
+    if (id === 'wordmark') return wordmarkThumb(size);
     var c = canvasOf(size || 1000);
     var ctx = c.getContext('2d');
     ctx.imageSmoothingEnabled = true;
@@ -218,6 +251,11 @@
 
   /** 파이프라인 입력용 ImageData */
   function imageData(id, size) {
+    if (id === 'wordmark') {
+      var mini = drawWordmark();
+      // 원본 픽셀 그대로 (슈퍼샘플링은 엔진이 한다)
+      return mini.getContext('2d').getImageData(0, 0, mini.width, mini.height);
+    }
     var c = draw(id, size || 1000);
     return c.getContext('2d').getImageData(0, 0, c.width, c.height);
   }

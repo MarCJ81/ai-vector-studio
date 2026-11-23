@@ -117,6 +117,162 @@
   }
 
   /* ==========================================================
+     2-B · Lanczos 리샘플 (프리멀티플라이드 알파)
+     ----------------------------------------------------------
+     작은 로고(90×41 같은)는 획 폭이 4~6px 라, 원본 해상도에서 윤곽을
+     따면 계단·뭉개짐이 생긴다. 변환 전에 2×~8× 로 키워 경계를
+     서브픽셀 수준으로 벌려 두면 베지어 피팅이 실제 곡선을 되찾는다.
+     ========================================================== */
+  /**
+   * 확대용 커널: 삼각(bilinear) — 음수 로브가 없어 링잉이 생기지 않는다.
+   * Lanczos 는 가장자리에 overshoot 를 만들어, 팔레트로 스냅할 때
+   * 경계를 따라 얇은 잔상 섬(수백 개의 조각)을 만든다.
+   */
+  function upsampleKernel(x) {
+    var a = Math.abs(x);
+    return a >= 1 ? 0 : 1 - a;
+  }
+  /** 축소용 커널: Lanczos3 (다운샘플에서 선명도 유지) */
+  function lanczos3(x) {
+    if (x === 0) return 1;
+    var a = Math.abs(x);
+    if (a >= 3) return 0;
+    var px = Math.PI * a;
+    return 3 * Math.sin(px) * Math.sin(px / 3) / (px * px);
+  }
+
+  /** 목적 좌표별 탭(원본 인덱스 + 정규화 가중치) */
+  function buildTaps(dstLen, srcLen) {
+    var scale = srcLen / dstLen;
+    var support = scale < 1 ? 1 : 3 * scale;
+    var taps = [];
+    for (var i = 0; i < dstLen; i++) {
+      var center = (i + 0.5) * scale - 0.5;
+      var lo = Math.floor(center - support + 0.5), hi = Math.ceil(center + support - 0.5);
+      var idx = [], wt = [], sum = 0;
+      for (var j = lo; j <= hi; j++) {
+        var t = center - j;
+        var wj = scale < 1 ? upsampleKernel(t) : lanczos3(t / scale);
+        if (wj === 0) continue;
+        idx.push(clamp(j, 0, srcLen - 1)); wt.push(wj); sum += wj;
+      }
+      if (!sum) { idx = [clamp(Math.round(center), 0, srcLen - 1)]; wt = [1]; sum = 1; }
+      for (var k = 0; k < wt.length; k++) wt[k] /= sum;
+      taps.push({ idx: idx, wt: wt });
+    }
+    return taps;
+  }
+
+  /**
+   * 이미지를 k배로 리샘플한다 (k>1 확대, k<1 축소).
+   * 색은 알파로 프리멀티플라이 해서 섞어야 투명 경계에 검은 테가 안 생긴다.
+   */
+  function resample(image, k) {
+    var w = image.width, h = image.height, d = image.data;
+    var W = Math.max(1, Math.round(w * k)), H = Math.max(1, Math.round(h * k));
+    if (W === w && H === h) return { width: w, height: h, data: d };
+    var tx = buildTaps(W, w), ty = buildTaps(H, h);
+    var tmp = new Float32Array(W * h * 4);
+    for (var y = 0; y < h; y++) {
+      var row = y * w;
+      for (var x = 0; x < W; x++) {
+        var t = tx[x], rr = 0, gg = 0, bb = 0, aa = 0;
+        for (var i = 0; i < t.idx.length; i++) {
+          var o = (row + t.idx[i]) * 4, wt = t.wt[i], al = d[o + 3] / 255;
+          rr += d[o] * al * wt; gg += d[o + 1] * al * wt; bb += d[o + 2] * al * wt; aa += al * wt;
+        }
+        var o2 = (y * W + x) * 4;
+        tmp[o2] = rr; tmp[o2 + 1] = gg; tmp[o2 + 2] = bb; tmp[o2 + 3] = aa;
+      }
+    }
+    var out = new Uint8ClampedArray(W * H * 4);
+    for (var yy = 0; yy < H; yy++) {
+      var t2 = ty[yy];
+      for (var xx = 0; xx < W; xx++) {
+        var r2 = 0, g2 = 0, b2 = 0, a2 = 0;
+        for (var j = 0; j < t2.idx.length; j++) {
+          var o3 = (t2.idx[j] * W + xx) * 4, w2 = t2.wt[j];
+          r2 += tmp[o3] * w2; g2 += tmp[o3 + 1] * w2; b2 += tmp[o3 + 2] * w2; a2 += tmp[o3 + 3] * w2;
+        }
+        var o4 = (yy * W + xx) * 4, inv = a2 > 1e-5 ? 1 / a2 : 0;
+        out[o4] = r2 * inv; out[o4 + 1] = g2 * inv; out[o4 + 2] = b2 * inv;
+        out[o4 + 3] = Math.round(clamp(a2, 0, 1) * 255);
+      }
+    }
+    return { width: W, height: H, data: out };
+  }
+
+  /**
+   * 알파를 sentinel 색으로 합성한 뒤 가장 가까운 팔레트 색으로 고정한다.
+   * (투명 → sentinel → 추적에서 제외) 안티에일리어싱 그라데이션이 사라져
+   * VTracer 가 색 띠를 만들지 않고 도형만 남긴다.
+   */
+  function flattenToPalette(image, palette, sentinel) {
+    var w = image.width, h = image.height, d = image.data, n = w * h;
+    var pal = palette.slice();
+    var base = sentinel ? [sentinel[0], sentinel[1], sentinel[2]] : [255, 255, 255];
+    var baseIsNew = false;
+    if (sentinel) {
+      // 팔레트에 사실상 같은 색(#FEFEFE vs #FFFFFF)이 있으면 새 색을 넣지 않는다.
+      // 거의 같은 두 색을 넣으면 스냅 결과가 소금-후추처럼 튀어 조각이 수백 개 생긴다.
+      var near = -1, nd = 18;
+      for (var c0 = 0; c0 < pal.length; c0++) {
+        var dd0 = Math.sqrt(dist2c(base, pal[c0]));
+        if (dd0 < nd) { nd = dd0; near = c0; }
+      }
+      if (near >= 0) base = [pal[near][0], pal[near][1], pal[near][2]];
+      else { pal.push(base); baseIsNew = true; }
+    }
+    var out = new Uint8ClampedArray(n * 4);
+    var counts = new Float64Array(pal.length);
+    for (var i = 0; i < n; i++) {
+      var o = i * 4, a = d[o + 3] / 255;
+      var r = d[o] * a, g = d[o + 1] * a, b = d[o + 2] * a;
+      if (sentinel && a < 1) {
+        r += base[0] * (1 - a); g += base[1] * (1 - a); b += base[2] * (1 - a);
+      }
+      var bi = 0, bd = Infinity;
+      for (var c = 0; c < pal.length; c++) {
+        var p = pal[c], dr = r - p[0], dg = g - p[1], db = b - p[2];
+        var dd = dr * dr + dg * dg + db * db;
+        if (dd < bd) { bd = dd; bi = c; }
+      }
+      counts[bi]++;
+      out[o] = pal[bi][0]; out[o + 1] = pal[bi][1]; out[o + 2] = pal[bi][2]; out[o + 3] = 255;
+    }
+    return { width: w, height: h, data: out, counts: counts, palette: pal, base: base, baseIsNew: baseIsNew };
+  }
+
+  /** 팔레트와 충분히 먼 sentinel 색 고르기 */
+  function pickSentinel(palette) {
+    var cands = [[255, 0, 255], [0, 255, 0], [255, 255, 0], [0, 255, 255], [255, 128, 0]];
+    var best = cands[0], bestD = -1;
+    for (var i = 0; i < cands.length; i++) {
+      var md = Infinity;
+      for (var j = 0; j < palette.length; j++) {
+        var dd = Math.sqrt(dist2c(cands[i], palette[j]));
+        if (dd < md) md = dd;
+      }
+      if (md > bestD) { bestD = md; best = cands[i]; }
+      if (md >= 120) break;
+    }
+    return best;
+  }
+
+  /**
+   * 해상도에 따른 슈퍼샘플 배율.
+   * 96px 이하 8×, 200px 이하 4×, 480px 이하 3×, 그 이상 1×.
+   * 긴 변이 2048px 을 넘지 않게 제한해 모바일에서도 한 번에 끝난다.
+   */
+  function autoSupersample(w, h, maxSide) {
+    var side = Math.max(w, h);
+    var k = side <= 96 ? 8 : side <= 200 ? 4 : side <= 480 ? 3 : 1;
+    var cap = Math.min(maxSide || 1400, 2048);
+    while (k > 1 && side * k > cap) k = k === 3 ? 2 : k >> 1;
+    return k > 1 ? k : 1;
+  }
+
+  /* ==========================================================
      3 · 팔레트 양자화 (Median-Cut → K-means)
      ========================================================== */
   /** 불투명 픽셀만 표본 추출. skipEdge 면 투명 영역에 닿은 1px 테두리(AA 혼합색)를 제외. */
@@ -983,6 +1139,246 @@
   }
 
   /* ==========================================================
+     10-B · SVG 경로 해석 (VTracer 출력 → 공통 레이어 모델)
+     ----------------------------------------------------------
+     VTracer 는 상대 명령(m/l/c)과 S/T 를 섞어 쓴다. EPS/PDF 로
+     내보내려면 절대 M/L/C 만 필요하므로 여기서 정규화한다.
+     ========================================================== */
+  var PATH_TOKEN = /([MmLlHhVvCcSsQqTtZzAa])|(-?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?)/g;
+
+  function parsePathD(d) {
+    var toks = [], m;
+    PATH_TOKEN.lastIndex = 0;
+    while ((m = PATH_TOKEN.exec(d))) toks.push(m[1] || m[2]);
+    var i = 0, cmd = null, cur = [0, 0], start = [0, 0], prevC = null;
+    var loops = [], loop = null;
+    function num() { return parseFloat(toks[i++]); }
+    while (i < toks.length) {
+      var t = toks[i];
+      if (/^[A-Za-z]$/.test(t)) {
+        if (t === 'A' || t === 'a') throw new Error('arc command not supported');
+        cmd = t; i++;
+        if (cmd === 'Z' || cmd === 'z') {
+          if (loop && loop.segs.length) { loop.closed = true; loops.push(loop); }
+          loop = null; cur = [start[0], start[1]]; prevC = null;
+          continue;
+        }
+      }
+      if (!cmd) throw new Error('path must start with a command');
+      var rel = cmd === cmd.toLowerCase(), C = cmd.toUpperCase();
+      var x, y, x1, y1, x2, y2;
+      if (C === 'M') {
+        x = num(); y = num();
+        if (rel) { x += cur[0]; y += cur[1]; }
+        loop = { start: [x, y], segs: [], closed: false };
+        cur = [x, y]; start = [x, y]; prevC = null;
+        cmd = rel ? 'l' : 'L';
+      } else if (C === 'L' || C === 'H' || C === 'V') {
+        if (C === 'L') { x = num(); y = num(); if (rel) { x += cur[0]; y += cur[1]; } }
+        else if (C === 'H') { x = num(); if (rel) x += cur[0]; y = cur[1]; }
+        else { y = num(); if (rel) y += cur[1]; x = cur[0]; }
+        if (!loop) { loop = { start: [cur[0], cur[1]], segs: [], closed: false }; prevC = null; }
+        loop.segs.push({ type: 'L', x: x, y: y }); cur = [x, y]; prevC = null;
+      } else if (C === 'C' || C === 'S') {
+        if (C === 'C') {
+          x1 = num(); y1 = num(); x2 = num(); y2 = num(); x = num(); y = num();
+          if (rel) { x1 += cur[0]; y1 += cur[1]; x2 += cur[0]; y2 += cur[1]; x += cur[0]; y += cur[1]; }
+        } else {
+          x2 = num(); y2 = num(); x = num(); y = num();
+          if (rel) { x2 += cur[0]; y2 += cur[1]; x += cur[0]; y += cur[1]; }
+          x1 = prevC ? 2 * cur[0] - prevC[0] : cur[0];
+          y1 = prevC ? 2 * cur[1] - prevC[1] : cur[1];
+        }
+        if (!loop) { loop = { start: [cur[0], cur[1]], segs: [], closed: false }; }
+        loop.segs.push({ type: 'C', x1: x1, y1: y1, x2: x2, y2: y2, x: x, y: y });
+        prevC = [x2, y2]; cur = [x, y];
+      } else if (C === 'Q' || C === 'T') {
+        if (C === 'Q') {
+          x1 = num(); y1 = num(); x = num(); y = num();
+          if (rel) { x1 += cur[0]; y1 += cur[1]; x += cur[0]; y += cur[1]; }
+        } else {
+          x = num(); y = num();
+          if (rel) { x += cur[0]; y += cur[1]; }
+          x1 = prevC ? 2 * cur[0] - prevC[0] : cur[0];
+          y1 = prevC ? 2 * cur[1] - prevC[1] : cur[1];
+        }
+        if (!loop) { loop = { start: [cur[0], cur[1]], segs: [], closed: false }; }
+        // 2차 → 3차 베지어 (동일 곡선)
+        loop.segs.push({
+          type: 'C',
+          x1: cur[0] + 2 / 3 * (x1 - cur[0]), y1: cur[1] + 2 / 3 * (y1 - cur[1]),
+          x2: x + 2 / 3 * (x1 - x), y2: y + 2 / 3 * (y1 - y), x: x, y: y
+        });
+        prevC = [x1, y1]; cur = [x, y];
+      } else { i++; }
+    }
+    if (loop && loop.segs.length) { loop.closed = true; loops.push(loop); }
+    return loops;
+  }
+
+  /** 루프들을 절대 M/L/C 문자열 + 좌표 배율(sx)로 직렬화 */
+  function loopsToD(loops, sx, digits) {
+    var parts = [];
+    for (var i = 0; i < loops.length; i++) {
+      var lp = loops[i];
+      if (!lp.segs.length) continue;
+      parts.push('M' + pair(lp.start[0] * sx, lp.start[1] * sx, digits));
+      for (var s = 0; s < lp.segs.length; s++) {
+        var g = lp.segs[s];
+        if (g.type === 'L') parts.push('L' + pair(g.x * sx, g.y * sx, digits));
+        else parts.push('C' + pair(g.x1 * sx, g.y1 * sx, digits) + ' ' + pair(g.x2 * sx, g.y2 * sx, digits) +
+                        ' ' + pair(g.x * sx, g.y * sx, digits));
+      }
+      parts.push('Z');
+    }
+    return parts.join('');
+  }
+
+  /** 곡선 포함 루프의 면적 (3차 베지어를 8등분해 다각형 근사) */
+  function bezierLoopArea(lp, steps) {
+    var n = steps || 8, pts = [], cur = lp.start;
+    pts.push(cur);
+    for (var s = 0; s < lp.segs.length; s++) {
+      var g = lp.segs[s];
+      if (g.type === 'L') { cur = [g.x, g.y]; pts.push(cur); continue; }
+      for (var i = 1; i <= n; i++) {
+        var t = i / n, u = 1 - t;
+        var x = u * u * u * cur[0] + 3 * u * u * t * g.x1 + 3 * u * t * t * g.x2 + t * t * t * g.x;
+        var y = u * u * u * cur[1] + 3 * u * u * t * g.y1 + 3 * u * t * t * g.y2 + t * t * t * g.y;
+        pts.push([x, y]);
+      }
+      cur = [g.x, g.y];
+    }
+    return loopArea(pts);
+  }
+
+  /** 레이어(루프 묶음)의 경계 상자 */
+  function loopsBBox(loops) {
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (var i = 0; i < loops.length; i++) {
+      var lp = loops[i];
+      var pts = [lp.start];
+      for (var s = 0; s < lp.segs.length; s++) {
+        var g = lp.segs[s];
+        pts.push([g.x, g.y]);
+        if (g.type === 'C') { pts.push([g.x1, g.y1], [g.x2, g.y2]); }
+      }
+      for (var p = 0; p < pts.length; p++) {
+        if (pts[p][0] < x0) x0 = pts[p][0];
+        if (pts[p][0] > x1) x1 = pts[p][0];
+        if (pts[p][1] < y0) y0 = pts[p][1];
+        if (pts[p][1] > y1) y1 = pts[p][1];
+      }
+    }
+    return [x0, y0, x1, y1];
+  }
+
+  /** 점이 루프 묶음 안쪽인가 (even-odd 광선 추적) */
+  function pointInLoops(loops, px, py) {
+    var inside = false;
+    for (var l = 0; l < loops.length; l++) {
+      var lp = loops[l], cur = lp.start, pts = [cur];
+      for (var s = 0; s < lp.segs.length; s++) {
+        var g = lp.segs[s];
+        if (g.type === 'L') { pts.push([g.x, g.y]); cur = [g.x, g.y]; continue; }
+        for (var i = 1; i <= 6; i++) {
+          var t = i / 6, u = 1 - t;
+          pts.push([
+            u * u * u * cur[0] + 3 * u * u * t * g.x1 + 3 * u * t * t * g.x2 + t * t * t * g.x,
+            u * u * u * cur[1] + 3 * u * u * t * g.y1 + 3 * u * t * t * g.y2 + t * t * t * g.y
+          ]);
+        }
+        cur = [g.x, g.y];
+      }
+      for (var k = 0; k < pts.length; k++) {
+        var a = pts[k], b = pts[(k + 1) % pts.length];
+        if ((a[1] > py) !== (b[1] > py)) {
+          var xx = a[0] + (py - a[1]) / (b[1] - a[1]) * (b[0] - a[0]);
+          if (xx > px) inside = !inside;
+        }
+      }
+    }
+    return inside;
+  }
+
+  /**
+   * 배경색 패스 정리.
+   *  · 캔버스 전체를 덮는 배경 패스 → 버린다 (배경 투명화)
+   *  · 도형 안쪽에 갇힌 배경색 패스(글자 'd'의 구멍 같은) → 그 도형의
+   *    서브패스로 합친다. fill-rule=evenodd 라서 진짜 구멍이 된다.
+   * @returns {layers, dropped}
+   */
+  function foldBackground(layers, baseHex, width, height) {
+    var out = [], dropped = 0;
+    var base = String(baseHex || '').toUpperCase();
+    for (var i = 0; i < layers.length; i++) {
+      var L = layers[i];
+      var b = loopsBBox(L.loops);
+      var covers = (b[2] - b[0]) >= width * 0.9 && (b[3] - b[1]) >= height * 0.9;
+      if (L.hex === base && covers) { dropped++; continue; }
+      L.bbox = b;
+      if (L.hex === base) {
+        // 배경색 패스는 '구멍'일 수 있다 → 루프 하나씩 부모 도형에 접어 넣는다.
+        // (한 패스에 구멍이 여러 개 들어 있는 경우도 있어 레이어 단위로는 부족하다)
+        var rest = [];
+        for (var li = 0; li < L.loops.length; li++) {
+          var lp = L.loops[li];
+          var lb = loopsBBox([lp]);
+          var area = bezierLoopArea(lp);
+          var parent = null;
+          var cx = (lb[0] + lb[2]) / 2, cy = (lb[1] + lb[3]) / 2;
+          for (var j = out.length - 1; j >= 0; j--) {
+            var P = out[j], pb = P.bbox;
+            if (P.area > area && pb[0] <= lb[0] + 0.6 && pb[1] <= lb[1] + 0.6 &&
+                pb[2] >= lb[2] - 0.6 && pb[3] >= lb[3] - 0.6 && pointInLoops(P.loops, cx, cy)) { parent = P; break; }
+          }
+          if (parent) {
+            parent.loops = parent.loops.concat([lp]);
+            parent.area -= area;
+            parent.holes = (parent.holes || 0) + 1;
+          } else if (area > 0.5) {
+            rest.push(lp);
+          }
+        }
+        if (rest.length) { L.loops = rest; L.area = 0; for (var r = 0; r < rest.length; r++) L.area += bezierLoopArea(rest[r]); out.push(L); }
+        continue;
+      }
+      out.push(L);
+    }
+    return { layers: out, dropped: dropped };
+  }
+
+
+  /**
+   * VTracer SVG → { layers:[{hex,color,loops,area,anchors}] }
+   * fill 색이 dropHex 와 같은 패스(배경/sentinel)는 버린다.
+   */
+  function parseTraceSVG(svg, opts) {
+    opts = opts || {};
+    var drop = (opts.drop || []).map(function (h) { return String(h).toUpperCase(); });
+    var scale = opts.scale == null ? 1 : opts.scale;
+    var layers = [];
+    var re = /<path\b([^>]*?)\/?>/g, m;
+    while ((m = re.exec(svg))) {
+      var attrs = m[1];
+      var dm = /\bd="([^"]*)"/.exec(attrs);
+      if (!dm) continue;
+      var fm = /\bfill="([^"]*)"/.exec(attrs);
+      var hex = fm ? fm[1].trim().toUpperCase() : '#000000';
+      if (hex.charAt(0) !== '#') continue;
+      if (hex.length === 4) hex = '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+      if (drop.indexOf(hex) >= 0) continue;
+      var loops;
+      try { loops = parsePathD(dm[1]); } catch (e) { continue; }
+      if (!loops.length) continue;
+      var area = 0, anchors = 0;
+      for (var i = 0; i < loops.length; i++) { area += bezierLoopArea(loops[i]); anchors += loops[i].segs.length; }
+      layers.push({ hex: hex, color: hexToRgb(hex), loops: loops, area: area, anchors: anchors });
+    }
+    return layers;
+  }
+
+  /* ==========================================================
      11 · 파이프라인
      ========================================================== */
   /**
@@ -995,7 +1391,11 @@
     var t0 = nowMs();
     if (!input || !input.width || !input.height || !input.data) throw new Error('image required');
 
-    var fitted = fitImage(input, o.maxSide || 1400);
+    var fitted0 = fitImage(input, o.maxSide || 1400);
+    var ss = o.supersample == null || o.supersample === 'auto'
+      ? autoSupersample(fitted0.width, fitted0.height, o.maxSide || 1400)
+      : clamp(Math.round(Number(o.supersample) || 1), 1, 8);
+    var fitted = ss > 1 ? resample(fitted0, ss) : fitted0;
     var srcData = fitted.data;
     // 배경 제거·디컨타미네이션이 픽셀을 바꾸므로, 호출자가 넘긴 원본은 건드리지 않는다
     if (o.background && (o.background.mode || 'edges') !== 'none') {
@@ -1022,14 +1422,15 @@
     if (bgRes.removed > 0) decontaminate(img, labels, palette);
     var alpha = alphaOf(img);
 
-    // 3) 스펙클
-    var specks = removeSpecks(labels, w, h, o.minArea == null ? 4 : o.minArea, palette.length);
+    // 3) 스펙클 — minArea 는 원본 픽셀 면적이라 슈퍼샘플 배율의 제곱만큼 키운다
+    var ss2 = ss * ss;
+    var specks = removeSpecks(labels, w, h, (o.minArea == null ? 4 : o.minArea) * ss2, palette.length);
 
     // 4) 서브픽셀 멤버십
     var soft = buildSoft(img, labels, palette);
 
     // 5) 레이어별 윤곽 → 정리
-    var eps = o.simplify == null ? 0.8 : o.simplify;
+    var eps = (o.simplify == null ? 0.8 : o.simplify) * ss;
     var fitErr = Math.max(0.32, eps * 0.8);
     var digits = o.digits == null ? 2 : clamp(o.digits | 0, 0, 3);
     var layers = [];
@@ -1057,7 +1458,7 @@
       if (!loops.length) continue;
       var area = 0, dparts = [];
       var loopAnchors = 0, loopCount = 0;
-      var minLoop = o.minLoopArea == null ? 1.2 : o.minLoopArea;
+      var minLoop = (o.minLoopArea == null ? 1.2 : o.minLoopArea) * ss2;
       for (var li = 0; li < loops.length; li++) {
         var raw = loops[li];
         var ar = loopArea(raw);
@@ -1071,9 +1472,9 @@
         var bw = bx1 - bx0, bh = by1 - by0;
         // 계단 꼭지에서 생기는 슬리버(면적≈0) 제거
         if (ar < minLoop) continue;
-        if (ar < 3 && bw < 2 && bh < 2) { totalRawPoints += raw.length; continue; }
+        if (ar < 3 * ss2 && bw < 2 * ss && bh < 2 * ss) { totalRawPoints += raw.length; continue; }
         // 얇고 긴 실오라기(AA 테두리 잔여물) 제거 — 둘레²/면적이 큰 경우
-        if (ar < 12) {
+        if (ar < 12 * ss2) {
           var perim = 0;
           for (var pi = 0; pi < raw.length; pi++) {
             var pj = (pi + 1) % raw.length;
@@ -1091,7 +1492,10 @@
           var gap = Math.hypot(last.x - fit.start[0], last.y - fit.start[1]);
           if (gap < Math.max(0.75, fitErr * 2.2)) { last.x = fit.start[0]; last.y = fit.start[1]; }
         }
-        dparts.push(commandsToPath(fit.start, segs, digits));
+        dparts.push(loopsToD([{ start: [fit.start[0] / ss, fit.start[1] / ss], segs: segs.map(function (g) {
+          return g.type === 'L' ? { type: 'L', x: g.x / ss, y: g.y / ss }
+            : { type: 'C', x1: g.x1 / ss, y1: g.y1 / ss, x2: g.x2 / ss, y2: g.y2 / ss, x: g.x / ss, y: g.y / ss };
+        }) }], 1, digits));
         area += ar;
         loopAnchors += segs.length;
         loopCount++;
@@ -1117,9 +1521,10 @@
 
     return {
       version: VERSION,
-      width: w, height: h,
+      width: fitted0.width, height: fitted0.height,
       sourceWidth: input.width, sourceHeight: input.height,
-      scale: fitted.scale,
+      scale: fitted0.scale,
+      supersample: ss,
       palette: palette.map(function (p) { return { rgb: p.map(Math.round), hex: rgbToHex(p) }; }),
       layers: layers,
       stats: {
@@ -1135,6 +1540,7 @@
         removedBackground: bgRes.removed,
         removedSpecks: specks.removed,
         speckPixels: specks.pixels,
+        supersample: ss,
         simplify: eps,
         digits: digits
       }
@@ -1335,6 +1741,18 @@
     decontaminate: decontaminate,
     removeSpecks: removeSpecks,
     buildSoft: buildSoft,
+    resample: resample,
+    autoSupersample: autoSupersample,
+    flattenToPalette: flattenToPalette,
+    pickSentinel: pickSentinel,
+    fitImage: fitImage,
+    /* 경로 */
+    parsePathD: parsePathD,
+    loopsToD: loopsToD,
+    parseTraceSVG: parseTraceSVG,
+    loopsBBox: loopsBBox,
+    pointInLoops: pointInLoops,
+    foldBackground: foldBackground,
     /* 윤곽 */
     traceField: traceField,
     simplifyDP: simplifyDP,

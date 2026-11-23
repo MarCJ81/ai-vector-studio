@@ -9,9 +9,15 @@
   var C = window.VectorCore;
   var $ = function (id) { return document.getElementById(id); };
 
+  var PRESETS = {
+    logo: { colors: 6, minArea: 2, simplify: 0.5 },
+    illustration: { colors: 12, minArea: 8, simplify: 1.2 },
+    light: { colors: 4, minArea: 24, simplify: 2.4 }
+  };
+
   var DEFAULTS = {
-    colors: 6, bgMode: 'edges', bgTol: 30, minArea: 8, simplify: 0.8,
-    maxSide: 1200, digits: 2, cmyk: false,
+    colors: 6, bgMode: 'edges', bgTol: 30, minArea: 2, simplify: 0.5,
+    maxSide: 1200, digits: 2, cmyk: false, preset: 'logo',
     viewMode: 'side', zoom: 'fit', showPaths: false, plainBg: false
   };
 
@@ -169,7 +175,7 @@
     var st = S.settings;
     var res;
     try {
-      res = C.vectorize(S.source, {
+      var opts = {
         colors: st.colors,
         background: { mode: st.bgMode, tolerance: Number(st.bgTol) },
         minArea: Number(st.minArea),
@@ -177,7 +183,10 @@
         cornerAngle: 72,
         digits: Number(st.digits),
         maxSide: Number(st.maxSide)
-      });
+      };
+      var P = window.PrecisionVector;
+      res = (P && P.ready()) ? P.vectorize(S.source, opts)
+        : C.vectorize(S.source, Object.assign({ supersample: 'auto' }, opts));
     } catch (err) {
       S.busy = false; progress(false);
       setStatus('오류');
@@ -284,10 +293,23 @@
     $('stAnchors').textContent = r.stats.anchors.toLocaleString();
     $('stPaths').textContent = r.stats.loops.toLocaleString();
     $('stSize').innerHTML = kb(S.out.svg.length) + '';
-    $('stColors').textContent = r.layers.length;
+    var uniq = {};
+    for (var ci = 0; ci < r.layers.length; ci++) uniq[r.layers[ci].hex] = 1;
+    $('stColors').textContent = Object.keys(uniq).length;
     var red = r.stats.reduction * 100;
     $('stReduction').innerHTML = (red >= 99.95 ? '99.9' : red.toFixed(1)) + '<small>%</small>';
     $('stTime').innerHTML = r.stats.ms + '<small>ms</small>';
+    var eb = $('engineBadge');
+    if (eb) {
+      var vt = r.engine === 'vtracer';
+      eb.textContent = vt
+        ? '정밀 엔진 · VTracer WASM' + (r.stats.supersample > 1 ? ' · ' + r.stats.supersample + '× 슈퍼샘플' : '')
+        : (r.fallback === 'vtracer-complex' ? '자체 엔진 · 복잡도 자동 전환' : '자체 엔진' + (r.supersample > 1 ? ' · ' + r.supersample + '×' : ''));
+      eb.className = 'engine-badge' + (vt ? ' is-precise' : '');
+      eb.title = vt
+        ? 'VTracer ' + (r.engineVersion || '') + ' (MIT OR Apache-2.0) — 브라우저 안에서만 실행'
+        : '내장 베지어 엔진 — 같은 브라우저 안에서 실행';
+    }
   }
 
   function renderSizes() {
@@ -322,8 +344,10 @@
     var warn = '';
     if (r && r.stats.anchors > 8000) warn = '노드가 많은 편입니다 — 곡선 단순화를 오른쪽으로 옮기면 가벼워집니다.';
     else if (r && r.layers.length >= 10) warn = '색이 많아 파일이 커집니다. 인쇄용 로고라면 4~6색이 적당합니다.';
+    var uniq2 = {};
+    if (r) for (var ci2 = 0; ci2 < r.layers.length; ci2++) uniq2[r.layers[ci2].hex] = 1;
     $('bgInfo').innerHTML = (r
-      ? '도형 ' + r.layers.length + '색 · 패스 ' + r.stats.loops + '개 · 앵커 ' + r.stats.anchors + '개'
+      ? '도형 ' + Object.keys(uniq2).length + '색 · 패스 ' + r.stats.loops + '개 · 앵커 ' + r.stats.anchors + '개'
       : '') + (warn ? '<br><span style="color:var(--warn)">' + warn + '</span>' : '');
   }
 
@@ -461,6 +485,9 @@
     $('minAreaVal').textContent = st.minArea + ' px²';
     $('simplify').value = st.simplify;
     $('simplifyVal').textContent = Number(st.simplify).toFixed(1);
+    document.querySelectorAll('#presetSeg button').forEach(function (b) {
+      b.classList.toggle('is-on', b.dataset.preset === st.preset);
+    });
     $('maxSide').value = String(st.maxSide);
     $('cmyk').checked = !!st.cmyk;
     $('showPaths').checked = !!st.showPaths;
@@ -541,6 +568,8 @@
     // 색상
     document.querySelectorAll('#colorChips .chip').forEach(function (b) {
       b.addEventListener('click', function () {
+        S.settings.preset = 'custom';
+        document.querySelectorAll('#presetSeg button').forEach(function (x) { x.classList.toggle('is-on', false); });
         S.settings.colors = Number(b.dataset.colors);
         document.querySelectorAll('#colorChips .chip').forEach(function (x) { x.classList.toggle('is-on', x === b); });
         save(); schedule();
@@ -549,11 +578,26 @@
 
     // 잡티·정밀도
     $('minArea').addEventListener('input', function (e) {
+      S.settings.preset = 'custom';
+      document.querySelectorAll('#presetSeg button').forEach(function (x) { x.classList.toggle('is-on', false); });
       S.settings.minArea = Number(e.target.value);
       $('minAreaVal').textContent = e.target.value + ' px²';
       save(); schedule();
     });
+    document.querySelectorAll('#presetSeg button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var p = PRESETS[b.dataset.preset];
+        if (!p) return;
+        S.settings.preset = b.dataset.preset;
+        S.settings.colors = p.colors;
+        S.settings.minArea = p.minArea;
+        S.settings.simplify = p.simplify;
+        save(); syncControls(); schedule(0);
+      });
+    });
     $('simplify').addEventListener('input', function (e) {
+      S.settings.preset = 'custom';
+      document.querySelectorAll('#presetSeg button').forEach(function (x) { x.classList.toggle('is-on', false); });
       S.settings.simplify = Number(e.target.value);
       $('simplifyVal').textContent = Number(e.target.value).toFixed(1);
       $('simplifyHint').innerHTML = Number(e.target.value) < 0.7
@@ -622,6 +666,14 @@
     renderOriginal();
     // 첫 화면: 엠블럼 샘플로 바로 결과를 보여 준다 (저장된 설정은 유지)
     loadSample('emblem', false);
+    // 정밀 엔진(VTracer WASM)은 900KB 라서 첫 페인트 뒤에 조용히 불러온다
+    if (window.PrecisionVector) {
+      window.PrecisionVector.load().then(function (api) {
+        if (api && S.source) schedule(0);
+        var eb = $('engineBadge');
+        if (eb && !api) { eb.textContent = '자체 엔진 (정밀 엔진 로드 실패)'; }
+      });
+    }
   }
 
   window.__studio = {
@@ -634,6 +686,16 @@
     setSource: function (data, name) { acceptImageData(data, name, null); },
     download: download,
     settings: function () { return S.settings; },
+    engine: function () { return S.result ? S.result.engine : null; },
+    preset: function (name) {
+      var p = PRESETS[name];
+      if (!p) return;
+      S.settings.preset = name;
+      S.settings.colors = p.colors;
+      S.settings.minArea = p.minArea;
+      S.settings.simplify = p.simplify;
+      save(); syncControls(); schedule(0);
+    },
     ready: true
   };
 

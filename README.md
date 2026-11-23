@@ -33,6 +33,24 @@ AI가 만든 로고는 대부분 1024×1024 PNG입니다. 명함(300dpi)에 쓰�
 
 ## 2. 파이프라인
 
+**정밀 엔진 (기본)** — 작은 로고를 위한 경로. 윤곽 추적은 GitHub에서 가장 평판이 높은
+오픈소스 벡터화 엔진 **VTracer**(visioncortex, ★7.5k, MIT OR Apache-2.0)의 WebAssembly
+빌드를 씁니다. 바이너리는 저장소에 인라인되어 외부 요청이 없습니다.
+
+```
+이미지 → 배경 플러드필(가장자리/모서리)
+       → 팔레트: Median-Cut → K-means → AA 혼합색 정리
+       → 잡티 흡수 (원본 해상도 기준 minArea, 0~60 px²)
+       → 2×~8× 슈퍼샘플 (Lanczos 대신 링잉 없는 삼각 커널 + 알파 프리멀티플라이)
+       → 팔레트 스냅 (AA 그라데이션 제거, 투명부는 배경색으로 합성)
+       → VTracer: 색 영역 클러스터링 → 계층 추적 → 3차 베지어
+       → 배경 패스 제거 · 도형 안쪽 배경은 evenodd 구멍으로 접기
+       → 레이어 모델 → SVG / EPS / PDF·AI
+```
+
+**자체 엔진 (폴백)** — VTracer 가 없거나(구형 브라우저) 결과가 비정상적으로 잘게
+쪼개질 때 자동으로 씁니다. 서브픽셀 등고선을 직접 피팅하는 원래 파이프라인입니다.
+
 ```
 이미지 ─┬─ 배경 플러드필(가장자리/모서리) ─┐
         ├─ 팔레트: Median-Cut → K-means ────┤
@@ -46,6 +64,34 @@ AI가 만든 로고는 대부분 1024×1024 PNG입니다. 명함(300dpi)에 쓰�
                                             ▼
                 좌표 반올림 → 색상별 패스 병합 → SVG / EPS / PDF
 ```
+
+### 2-0. 왜 VTracer 인가
+
+| 엔진 | 별 | 라이선스 | 브라우저 실행 | 이 앱에서의 역할 |
+|---|---|---|---|---|
+| **visioncortex/vtracer** | 7.5k | MIT OR Apache-2.0 | WASM (668KB) | 채택 — 윤곽·곡선 추적 |
+| jankovicsandras/imagetracerjs | 1.6k | Unlicense | JS | 미채택 — 작은 글자에서 계단이 남음 |
+| potrace | 4k+ | GPL-2.0 | WASM | 미채택 — GPL 전염, 다색은 후처리 필요 |
+
+작은 로고(90×41px) 실측 — 같은 원본을 다시 래스터화해 비교:
+
+| 설정 | RMSE (0~255) | SSIM | SVG |
+|---|---|---|---|
+| 예전 기본값 (잡티 28px² · 단순화 3.0) | 43.4 | 0.755 | 1.1 KB |
+| 자체 엔진 (자동 8× 슈퍼샘플) | 27.7 | 0.912 | 2.4 KB |
+| **VTracer 정밀 엔진** | **14.2** | **0.968** | 3.2 KB |
+
+### 2-0-1. 프리셋
+
+| 프리셋 | 색 | 잡티 | 단순화 | 쓰는 곳 |
+|---|---|---|---|---|
+| 정밀 로고 (기본) | 6 | 2 px² | 0.5 | 로고·워드마크·아이콘 |
+| 일러스트 | 12 | 8 px² | 1.2 | AI 일러스트·마스코트 |
+| 경량 | 4 | 24 px² | 2.4 | 웹용으로 가볍게 |
+
+작은 이미지일수록 자동으로 더 크게 슈퍼샘플링합니다 (96px 이하 8×, 200px 이하 4×,
+480px 이하 3×). 잡티는 **원본 해상도 기준**으로 지우므로, 확대했다고 해서 1px 획이
+사라지지 않습니다.
 
 ### 2-1. 전처리
 
@@ -103,7 +149,10 @@ ai-vector-studio/
 ├── tokens.css          design-ref-engine 의 cream-editorial 토큰 (생성물)
 ├── styles.css          앱 스타일
 ├── core.js             변환 엔진 (UMD: 브라우저 window.VectorCore / node require)
-├── samples.js          내장 샘플 3종 (코드로 그린 래스터)
+├── precision.js        정밀 엔진 (VTracer WASM + 팔레트·슈퍼샘플·구멍 접기)
+├── engine/             VTracer 글루 + wasm base64 (외부 요청 없음, MIT/Apache-2.0)
+├── samples.js          내장 샘플 4종 (코드로 그린 래스터, 90×41 미니 로고 포함)
+├── tools/              engine/ 재생성 스크립트 (배포 제외)
 ├── app.js              UI 배선·비교 뷰·내보내기
 ├── assets/fonts/       IBM Plex Sans KR (로컬)
 ├── favicon.svg
@@ -124,7 +173,7 @@ node -e "const D=require('./packages/design-ref-engine.js');console.log(D.toCSS(
 ## 5. 테스트
 
 ```bash
-# 엔진 (알고리즘·포맷·용량·보안) — 약 1초
+# 엔진 (알고리즘·포맷·용량·보안) — 약 2초
 node test.js
 
 # 실제 브라우저 (1440×900 / 390×844)
@@ -167,6 +216,7 @@ LD_LIBRARY_PATH=/workspace/scratch/chromelibs:/workspace/scratch/calc/libs \
 | 512×512 | 2색 · 기본 | 약 90 ms |
 | 900×900 | 8색 · 기본 | 약 300 ms |
 | 1200×1200 | 6색 · 기본 | 약 300 ms (maxSide 축소 포함) |
+| 90×41 | 6색 · 정밀 (8× 슈퍼샘플 + VTracer) | 약 130 ms |
 
 작업 해상도는 기본 1200px 로 줄여서 처리합니다(원본 비율 유지, viewBox 로 확대).
 `maxSide` 를 1600 까지 올리면 더 정밀하지만 느려집니다.
@@ -177,7 +227,7 @@ LD_LIBRARY_PATH=/workspace/scratch/chromelibs:/workspace/scratch/calc/libs \
 
 - **사진**은 벡터화해도 사진처럼 보이지 않습니다. 색면 일러스트로 바뀝니다.
 - **그라데이션**은 색 단계로 근사하므로 띠가 보일 수 있습니다.
-- **아주 작은 글자**(12px 이하)는 뭉개집니다. 텍스트는 편집 프로그램에서 다시 입력하세요.
+- **아주 작은 글자** — 정밀 엔진은 90×41px 로고의 글자도 읽히게 살립니다. 다만 6px 이하 획은 원본에 정보가 없으므로 편집 프로그램에서 다시 입력하는 편이 좋습니다.
 - **반투명 그림자**는 불투명 색면이 됩니다.
 - CMYK 변환은 근사치입니다.
 
@@ -185,7 +235,8 @@ LD_LIBRARY_PATH=/workspace/scratch/chromelibs:/workspace/scratch/calc/libs \
 
 ## 8. 브라우저 지원
 
-Canvas 2D + ES5 문법 + `Map`/`Uint8ClampedArray`. Chrome·Edge·Safari·Firefox 최신 버전.
+Canvas 2D + ES5 문법 + `Map`/`Uint8ClampedArray` + WebAssembly(정밀 엔진).
+WebAssembly 가 없으면 자체 엔진으로 자동 폴백합니다. Chrome·Edge·Safari·Firefox 최신 버전.
 `localStorage` 를 못 쓰는 환경(사생활 보호 모드)에서도 동작합니다(설정 저장만 생략).
 
 ---

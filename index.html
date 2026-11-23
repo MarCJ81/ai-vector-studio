@@ -107,10 +107,16 @@
 
       <section class="blk">
         <h2><span>04</span>잡티 · 정밀도</h2>
-        <div class="row"><span class="lab">잡티 제거</span><span class="val" id="minAreaVal">8 px²</span></div>
-        <input type="range" id="minArea" min="0" max="60" step="1" value="8" aria-label="잡티 최소 면적" />
-        <div class="row"><span class="lab">곡선 단순화</span><span class="val" id="simplifyVal">0.8</span></div>
-        <input type="range" id="simplify" min="0.2" max="3" step="0.1" value="0.8" aria-label="단순화 강도" />
+        <div class="seg seg-wide" id="presetSeg" role="group" aria-label="정밀도 프리셋">
+          <button type="button" data-preset="logo" class="is-on">정밀 로고</button>
+          <button type="button" data-preset="illustration">일러스트</button>
+          <button type="button" data-preset="light">경량</button>
+        </div>
+        <p class="hint" style="margin:7px 0 10px">작은 로고는 자동으로 2~8배 키워서 따고, 획이 뭉개지지 않게 잡티는 원본 크기 기준으로 지웁니다.</p>
+        <div class="row"><span class="lab">잡티 제거</span><span class="val" id="minAreaVal">2 px²</span></div>
+        <input type="range" id="minArea" min="0" max="60" step="1" value="2" aria-label="잡티 최소 면적" />
+        <div class="row"><span class="lab">곡선 단순화</span><span class="val" id="simplifyVal">0.5</span></div>
+        <input type="range" id="simplify" min="0.2" max="3" step="0.1" value="0.5" aria-label="단순화 강도" />
         <p class="hint" id="simplifyHint">왼쪽은 초정밀, 오른쪽은 가벼움.</p>
         <div class="row">
           <span class="lab">작업 해상도</span>
@@ -174,6 +180,7 @@
         <div class="stat is-accent"><dt>노드 감소</dt><dd id="stReduction">–</dd></div>
         <div class="stat"><dt>처리 시간</dt><dd id="stTime">–</dd></div>
       </dl>
+      <p class="engine-badge" id="engineBadge">엔진 준비 중…</p>
     </section>
 
     <!-- 우: 내보내기 -->
@@ -242,6 +249,7 @@
 
     <h2>1 · 이 도구가 하는 일</h2>
     <p>래스터(PNG·JPG)를 <b>색 영역별 윤곽선</b>으로 바꾸고, 그 윤곽선을 <b>3차 베지어 곡선</b>으로 다시 그립니다. 결과는 픽셀이 아니라 수학이라, 명함이든 현수막이든 확대해도 계단이 생기지 않습니다.</p>
+    <p class="hint" style="margin-top:8px">윤곽 추적은 GitHub에서 가장 평판이 높은 오픈소스 벡터화 엔진 <b>VTracer</b>(visioncortex, MIT OR Apache-2.0)의 WebAssembly 빌드를 씁니다. 작은 로고는 2~8배로 키운 뒤 따고, 팔레트·배경 투명화·잡티 제거는 이 앱의 전처리가 맡습니다. 엔진은 브라우저 안에서만 돌고 외부로 아무것도 보내지 않습니다.</p>
     <table class="tbl">
       <thead><tr><th>단계</th><th>내용</th></tr></thead>
       <tbody>
@@ -268,7 +276,7 @@
 
     <h2>3 · 좋은 결과를 얻는 순서</h2>
     <ol>
-      <li><b>원본은 크게</b> — 1000px 이상으로 넣을수록 윤곽이 정확합니다. 작은 원본은 확대하지 말고 다시 생성하세요.</li>
+      <li><b>원본은 크게</b> — 1000px 이상으로 넣을수록 윤곽이 정확합니다. 작은 로고(100px 안팎)는 <b>정밀 로고</b> 프리셋이 자동으로 2~8배 슈퍼샘플링해 따냅니다.</li>
       <li><b>색상 수를 줄여서 시작</b> — 로고라면 2~4색. 색이 많을수록 파일이 커지고 미세 잡티도 늘어납니다.</li>
       <li><b>배경을 먼저 지우기</b> — 배경이 남아 있으면 그 사각형까지 하나의 도형이 되어 용량을 잡아먹습니다.</li>
       <li><b>잡티를 올려서 정리</b> — JPEG 압축 잡티가 많다면 10~20px²까지 올려 보세요.</li>
@@ -288,7 +296,7 @@
     <ul>
       <li><b>사진</b> — 사진은 벡터화해도 사진처럼 보이지 않습니다. 색면 일러스트로 바뀝니다.</li>
       <li><b>그라데이션</b> — 색 단계로 근사합니다. 부드러운 그라데이션은 띠가 보일 수 있습니다.</li>
-      <li><b>아주 작은 글자</b> — 12px 이하 글자는 뭉개집니다. 텍스트는 일러스트레이터에서 다시 입력하는 편이 좋습니다.</li>
+      <li><b>아주 작은 글자</b> — 정밀 로고 프리셋은 90×41px 같은 로고 글자도 읽히게 살립니다. 다만 6px 이하 획은 원본에 정보가 없으므로 일러스트레이터에서 다시 입력하는 편이 좋습니다.</li>
       <li><b>반투명 그림자</b> — 불투명 색면으로 바뀝니다.</li>
     </ul>
 
@@ -309,6 +317,7 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="core.js"></script>
+<script src="precision.js"></script>
 <script src="samples.js"></script>
 <script src="app.js"></script>
 </body>
