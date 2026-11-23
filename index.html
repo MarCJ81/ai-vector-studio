@@ -222,6 +222,11 @@
           </div>
         </div>
         <div class="opt-row">
+          <span class="lab">SVG 경량화</span>
+          <label class="toggle"><input type="checkbox" id="optSvg" checked /> 중복 path·공백 정리</label>
+        </div>
+        <p class="note" id="optSvgNote">같은 색 레이어를 합치고 그룹 래퍼·빈 좌표를 지웁니다. 모양은 그대로 두고 용량만 줄입니다.</p>
+        <div class="opt-row">
           <span class="lab">CMYK로 변환</span>
           <label class="toggle"><input type="checkbox" id="cmyk" /> EPS·AI·PDF</label>
         </div>
@@ -317,6 +322,7 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="core.js"></script>
+<script src="optimize.js"></script>
 <script src="precision.js"></script>
 <script src="samples.js"></script>
 <script src="app.js"></script>

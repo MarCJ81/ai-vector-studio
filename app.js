@@ -17,7 +17,7 @@
 
   var DEFAULTS = {
     colors: 6, bgMode: 'edges', bgTol: 30, minArea: 2, simplify: 0.5,
-    maxSide: 1200, digits: 2, cmyk: false, preset: 'logo',
+    maxSide: 1200, digits: 2, cmyk: false, preset: 'logo', optSvg: true,
     viewMode: 'side', zoom: 'fit', showPaths: false, plainBg: false
   };
 
@@ -197,6 +197,7 @@
 
     S.result = res;
     S.out.svg = C.buildSVG(res, { title: 'vector artwork' });
+    applySvgOptimize();
     S.out.eps = C.buildEPS(res, { cmyk: st.cmyk, title: 'vector artwork' });
     S.out.pdf = C.buildPDF(res, { cmyk: st.cmyk, title: 'vector artwork' });
     S.out.ai = S.out.pdf;
@@ -211,6 +212,47 @@
     progress(false);
     setStatus('완료 · ' + S.lastRun + 'ms', 'done');
     S.runs = (S.runs || 0) + 1;
+  }
+
+  /* ── SVG 경량화 (optimize.js) ──────────────────────────
+     VTracer 결과는 색 레이어마다 <g><path/></g> 한 덩어리다.
+     모양은 건드리지 않고 ① 겹치지 않는 같은 색 path 병합 ② 그룹 래퍼 제거
+     ③ 좌표 자릿수 정리 ④ 공백 압축만 한다. 실패하면 원본을 그대로 쓴다. */
+  function applySvgOptimize() {
+    if (!S.result) return null;
+    var raw = C.buildSVG(S.result, { title: 'vector artwork' });
+    var O = window.SvgOptimize;
+    var note = $('optSvgNote');
+    if (!O || S.settings.optSvg === false) {
+      S.out.svg = raw;
+      S.optStats = null;
+      if (note) note.textContent = '경량화를 끄면 VTracer 결과를 그대로 내보냅니다.';
+      return null;
+    }
+    var r;
+    try {
+      r = O.optimize(raw, {
+        precision: Math.max(0, Math.min(3, Number(S.settings.digits) || 2)),
+        mergeSameFill: true,
+        group: true,
+        minify: true
+      });
+    } catch (err) {
+      S.out.svg = raw;
+      S.optStats = null;
+      if (note) note.textContent = '경량화를 건너뛰고 원본 SVG로 내보냅니다.';
+      return null;
+    }
+    S.out.svg = r.svg;
+    S.optStats = r.stats;
+    if (note) {
+      var st = r.stats;
+      var merged = st.merged ? (' · path ' + st.merged + '개 병합') : '';
+      note.innerHTML = st.saved > 0
+        ? ('<b>' + kb(st.before) + ' → ' + kb(st.after) + '</b> (' + st.savedPct + '%↓) · 레이어 ' + st.layers + '개' + merged + '. 모양은 그대로입니다.')
+        : ('이미 최소 상태입니다 · ' + kb(st.after) + ' · 레이어 ' + st.layers + '개');
+    }
+    return r;
   }
 
   /* ── 렌더링 ────────────────────────────────────────── */
@@ -493,6 +535,7 @@
     });
     $('maxSide').value = String(st.maxSide);
     $('cmyk').checked = !!st.cmyk;
+    if ($('optSvg')) $('optSvg').checked = st.optSvg !== false;
     $('showPaths').checked = !!st.showPaths;
     $('plainBg').checked = !!st.plainBg;
     document.querySelectorAll('#colorChips .chip').forEach(function (b) {
@@ -641,6 +684,14 @@
       });
     });
     $('cmyk').addEventListener('change', function (e) { S.settings.cmyk = e.target.checked; save(); schedule(0); });
+    var optBox = $('optSvg');
+    if (optBox) {
+      optBox.addEventListener('change', function (e) {
+        S.settings.optSvg = e.target.checked; save();
+        if (applySvgOptimize()) { renderVector(); renderStats(); renderSizes(); }
+        else { renderVector(); renderStats(); renderSizes(); }
+      });
+    }
 
     // 리사이즈
     var rt = null;
