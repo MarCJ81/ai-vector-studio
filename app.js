@@ -156,19 +156,19 @@
 
   function loadFile(file) {
     if (!file) return;
-    if (!/^image\//.test(file.type)) { toast('이미지 파일이 아닙니다.'); return; }
+    if (!/^image\//.test(file.type)) { toast(tr('이미지 파일이 아닙니다.')); return; }
     var reader = new FileReader();
     reader.onload = function () {
       var img = new Image();
       img.onload = function () {
         var data = imageDataFromSource(img, 2400);
         acceptImageData(data, file.name, null);
-        toast(file.name + ' 불러옴');
+        toast(file.name + ' ' + tr('불러옴'));
       };
-      img.onerror = function () { toast('이미지를 읽지 못했습니다.'); };
+      img.onerror = function () { toast(tr('이미지를 읽지 못했습니다.')); };
       img.src = reader.result;
     };
-    reader.onerror = function () { toast('파일을 읽지 못했습니다.'); };
+    reader.onerror = function () { toast(tr('파일을 읽지 못했습니다.')); };
     reader.readAsDataURL(file);
   }
 
@@ -236,7 +236,7 @@
     } catch (err) {
       S.busy = false; progress(false);
       setStatus('오류');
-      toast('변환 중 문제가 생겼습니다.');
+      toast(tr('변환 중 문제가 생겼습니다.'));
       if (window.console) console.error(err);
       return;
     }
@@ -534,7 +534,7 @@
 
   /* ── 내보내기 ──────────────────────────────────────── */
   function download(kind) {
-    if (!S.result) { toast('먼저 이미지를 넣어 주세요.'); return; }
+    if (!S.result) { toast(tr('먼저 이미지를 넣어 주세요.')); return; }
     var name = slug($('fileName').value || 'vector');
     var map = {
       svg: { ext: 'svg', mime: 'image/svg+xml;charset=utf-8' },
@@ -557,7 +557,7 @@
     a.click();
     a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
-    toast(name + '.' + m.ext + ' 저장');
+    toast(name + '.' + m.ext + ' ' + tr('저장'));
     S.downloads = (S.downloads || []).concat([{ kind: kind, name: name + '.' + m.ext, bytes: blob.size }]);
   }
 

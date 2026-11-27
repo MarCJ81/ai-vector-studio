@@ -2031,6 +2031,13 @@ window.__ONETAP_I18N_DICT__ = {
 "선 길이 임계": "Line length threshold",
 "용량이 큽니다 — 색 단계·잡티 제거를 올리거나 작업 해상도를 낮추세요.": "Large file — raise the colour step or speckle filter, or lower the working resolution.",
 "(자동)": " (auto)",
+"저장": "saved",
+"불러옴": "loaded",
+"이미지 파일이 아닙니다.": "That is not an image file.",
+"이미지를 읽지 못했습니다.": "Could not read the image.",
+"파일을 읽지 못했습니다.": "Could not read the file.",
+"변환 중 문제가 생겼습니다.": "Something went wrong during conversion.",
+"먼저 이미지를 넣어 주세요.": "Add an image first.",
 };
 window.__ONETAP_I18N_RULES__ = [["^완료 · ([\\d.]+)ms$", "Done · $1 ms"], ["^잡티 ([\\d.,]+)개 흡수$", "$1 speckles absorbed"], ["^배경 ([\\d.,]+) px 제거$", "$1 px of background removed"], ["^원본 ([\\d]+×[\\d]+) px$", "Original $1 px"], ["^작업 ([\\d]+×[\\d]+) px$", "Working $1 px"], ["유튜브", "YouTube"], ["틱톡", "TikTok"], ["인스타그램", "Instagram"], ["인스타", "Instagram"], ["(\\d+)\\s*시간 전", "$1h ago"], ["(\\d+)\\s*일 전", "$1d ago"], ["(\\d+)\\s*분 전", "$1m ago"], ["(\\d+)\\s*초 전", "$1s ago"], ["(\\d+)\\s*초", "$1s"], ["(\\d+)\\s*개", "$1"], ["(\\d+)\\s*건", "$1 items"], ["(\\d+)\\s*회", "$1 calls"], ["(\\d+)\\s*명", "$1 people"], ["(\\d+)\\s*점", "$1 pts"], ["(\\d+)\\s*자", "$1 chars"], ["조회수", "views"], ["구독자", "subscribers"], ["좋아요", "likes"], ["댓글", "comments"]];
 (function(){var st=document.createElement("style");st.id="onetapLangCss";st.textContent="@media (max-width:620px){.topbar{height:auto;padding:6px 0}.bar-in{height:auto;flex-wrap:wrap;row-gap:6px}.bar-actions{margin-left:auto}.onetap-lang-toggle{height:30px;padding:0 8px}}\n";document.head.appendChild(st);})();
