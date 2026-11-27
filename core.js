@@ -109,6 +109,131 @@
     return { width: nw, height: nh, data: out, scale: nw / w };
   }
 
+  /**
+   * 가우시안 블러(프리멀티플라이드) — JPEG 잡티·색 번짐을 지워 추적을 깨끗하게.
+   * 반경 r 은 작업 픽셀 기준(σ). 원본은 건드리지 않고 새 버퍼를 돌려준다.
+   * @returns {{width:number,height:number,data:Uint8ClampedArray}}
+   */
+  function blurRGBA(image, radius) {
+    var w = image.width, h = image.height, src = image.data;
+    var r = Number(radius);
+    if (!(r > 0.05) || w < 2 || h < 2) {
+      return { width: w, height: h, data: new Uint8ClampedArray(src) };
+    }
+    var rad = Math.max(1, Math.ceil(r * 2.5));
+    var k = new Float32Array(rad * 2 + 1), sum = 0;
+    for (var i = -rad; i <= rad; i++) {
+      var v = Math.exp(-(i * i) / (2 * r * r));
+      k[i + rad] = v; sum += v;
+    }
+    for (var j = 0; j < k.length; j++) k[j] /= sum;
+
+    // 1) 알파 프리멀티플라이 + 가로 패스
+    var tmp = new Float32Array(w * h * 4);
+    for (var y = 0; y < h; y++) {
+      var row = y * w;
+      for (var x = 0; x < w; x++) {
+        var r0 = 0, g0 = 0, b0 = 0, a0 = 0;
+        for (var t = -rad; t <= rad; t++) {
+          var xx = x + t;
+          if (xx < 0) xx = 0; else if (xx >= w) xx = w - 1;
+          var o = (row + xx) * 4, wt = k[t + rad], al = src[o + 3] / 255;
+          r0 += src[o] * al * wt; g0 += src[o + 1] * al * wt; b0 += src[o + 2] * al * wt; a0 += al * wt;
+        }
+        var o2 = (row + x) * 4;
+        tmp[o2] = r0; tmp[o2 + 1] = g0; tmp[o2 + 2] = b0; tmp[o2 + 3] = a0;
+      }
+    }
+    // 2) 세로 패스 + 언프리멀티플라이
+    var out = new Uint8ClampedArray(w * h * 4);
+    for (var yy = 0; yy < h; yy++) {
+      for (var xx2 = 0; xx2 < w; xx2++) {
+        var r1 = 0, g1 = 0, b1 = 0, a1 = 0;
+        for (var t2 = -rad; t2 <= rad; t2++) {
+          var y2 = yy + t2;
+          if (y2 < 0) y2 = 0; else if (y2 >= h) y2 = h - 1;
+          var o3 = (y2 * w + xx2) * 4, w2 = k[t2 + rad];
+          r1 += tmp[o3] * w2; g1 += tmp[o3 + 1] * w2; b1 += tmp[o3 + 2] * w2; a1 += tmp[o3 + 3] * w2;
+        }
+        var o4 = (yy * w + xx2) * 4, inv = a1 > 1e-5 ? 1 / a1 : 0;
+        out[o4] = r1 * inv; out[o4 + 1] = g1 * inv; out[o4 + 2] = b1 * inv;
+        out[o4 + 3] = Math.round(clamp(a1, 0, 1) * 255);
+      }
+    }
+    return { width: w, height: h, data: out };
+  }
+
+  /**
+   * 경계보존 잡음 제거(양방향 필터).
+   * JPEG 잡티·모기 잡음은 공간적으로 가까운 이웃과 색도 비슷해 지워지고,
+   * 도형 경계는 색이 크게 달라 남는다 → 가우시안 블러처럼 테두리가 번지지 않는다.
+   * @param {number} radius 공간 반경(px) · @param {number} colorSigma 색 허용(0~40)
+   */
+  function denoiseRGBA(image, radius, colorSigma) {
+    var w = image.width, h = image.height, src = image.data;
+    var r = Number(radius);
+    if (!(r > 0.05) || w < 3 || h < 3) {
+      return { width: w, height: h, data: new Uint8ClampedArray(src) };
+    }
+    var rad = Math.max(1, Math.ceil(r));
+    var cs = colorSigma == null ? 12 : Number(colorSigma);
+    var cInv = 1 / (2 * cs * cs), sInv = 1 / (2 * r * r);
+    var k = new Float32Array(rad * 2 + 1);
+    for (var i = -rad; i <= rad; i++) k[i + rad] = Math.exp(-(i * i) * sInv);
+    // 색 거리 가중치 LUT (dd >> 4 인덱스) — exp() 를 픽셀마다 부르지 않는다
+    var LUT = 12288, lut = new Float32Array(LUT);
+    for (var li = 0; li < LUT; li++) lut[li] = Math.exp(-(li << 4) * cInv);
+    var limit = 9 * cs * cs;
+    var out = new Uint8ClampedArray(w * h * 4);
+    for (var y = 0; y < h; y++) {
+      var y0 = y - rad < 0 ? 0 : y - rad, y1 = y + rad >= h ? h - 1 : y + rad;
+      for (var x = 0; x < w; x++) {
+        var o = (y * w + x) * 4;
+        var cr = src[o], cg = src[o + 1], cb = src[o + 2];
+        var sr = cr, sg = cg, sb = cb, sw = 1;
+        var x0 = x - rad < 0 ? 0 : x - rad, x1 = x + rad >= w ? w - 1 : x + rad;
+        for (var yy = y0; yy <= y1; yy++) {
+          var wy = k[yy - y + rad], row = yy * w;
+          for (var xx = x0; xx <= x1; xx++) {
+            if (xx === x && yy === y) continue;
+            var o2 = (row + xx) * 4;
+            var dr = src[o2] - cr, dg = src[o2 + 1] - cg, db = src[o2 + 2] - cb;
+            var dd = dr * dr + dg * dg + db * db;
+            if (dd > limit) continue;              // 다른 면 — 건드리지 않는다
+            var idx = dd >> 4; if (idx >= LUT) idx = LUT - 1;
+            var wgt = wy * k[xx - x + rad] * lut[idx];
+            sr += src[o2] * wgt; sg += src[o2 + 1] * wgt; sb += src[o2 + 2] * wgt;
+            sw += wgt;
+          }
+        }
+        out[o] = sr / sw; out[o + 1] = sg / sw; out[o + 2] = sb / sw; out[o + 3] = src[o + 3];
+      }
+    }
+    return { width: w, height: h, data: out };
+  }
+
+  /**
+   * 투명 픽셀을 배경색으로 합성해 알파 없는 RGB 버퍼로 만든다.
+   * @returns {{width,height,data,base}}
+   */
+  function flatten(image, baseColor) {
+    var w = image.width, h = image.height, src = image.data, n = w * h;
+    var base = baseColor ? [baseColor[0], baseColor[1], baseColor[2]] : [255, 255, 255];
+    var out = new Uint8ClampedArray(n * 4);
+    for (var i = 0; i < n; i++) {
+      var o = i * 4, a = src[o + 3] / 255;
+      if (a >= 0.999) {
+        out[o] = src[o]; out[o + 1] = src[o + 1]; out[o + 2] = src[o + 2];
+      } else {
+        out[o] = src[o] * a + base[0] * (1 - a);
+        out[o + 1] = src[o + 1] * a + base[1] * (1 - a);
+        out[o + 2] = src[o + 2] * a + base[2] * (1 - a);
+      }
+      out[o + 3] = 255;
+    }
+    return { width: w, height: h, data: out, base: base };
+  }
+
   /** 알파 채널만 뽑아 0~1 로 */
   function alphaOf(image) {
     var n = image.width * image.height, src = image.data, a = new Float32Array(n);
@@ -1309,13 +1434,20 @@
    * @returns {layers, dropped}
    */
   function foldBackground(layers, baseHex, width, height) {
-    var out = [], dropped = 0;
+    var out = [];
     var base = String(baseHex || '').toUpperCase();
-    for (var i = 0; i < layers.length; i++) {
+    // 1) 캔버스를 덮는 배경층 찾기.
+    //    VTracer 'stacked' 는 캔버스 크기 패스를 여러 장 깔고 그 위에 도형을 쌓는다.
+    //    배경색을 덮는 마지막(=가장 위) 층보다 아래층은 화면에 보이지 않으므로 같이 버린다.
+    var cut = -1;
+    for (var c = layers.length - 1; c >= 0; c--) {
+      var cb = loopsBBox(layers[c].loops);
+      if (layers[c].hex === base && (cb[2] - cb[0]) >= width * 0.9 && (cb[3] - cb[1]) >= height * 0.9) { cut = c; break; }
+    }
+    var dropped = cut + 1;
+    for (var i = dropped; i < layers.length; i++) {
       var L = layers[i];
       var b = loopsBBox(L.loops);
-      var covers = (b[2] - b[0]) >= width * 0.9 && (b[3] - b[1]) >= height * 0.9;
-      if (L.hex === base && covers) { dropped++; continue; }
       L.bbox = b;
       if (L.hex === base) {
         // 배경색 패스는 '구멍'일 수 있다 → 루프 하나씩 부모 도형에 접어 넣는다.
@@ -1358,13 +1490,27 @@
     var drop = (opts.drop || []).map(function (h) { return String(h).toUpperCase(); });
     var scale = opts.scale == null ? 1 : opts.scale;
     var layers = [];
-    var re = /<path\b([^>]*?)\/?>/g, m;
+    // VTracer 는 같은 색 패스 여러 개를 <g fill="#rrggbb"> 로 묶어 내보낸다.
+    // 그룹 fill 을 따라가지 않으면 그 패스가 검정으로 떨어져 얼룩이 생긴다.
+    var re = /<g\b([^>]*)>|<\/g\s*>|<path\b([^>]*?)\/?>/g, m;
+    var fillStack = [];
+    function inheritedFill() {
+      for (var s = fillStack.length - 1; s >= 0; s--) if (fillStack[s]) return fillStack[s];
+      return null;
+    }
     while ((m = re.exec(svg))) {
-      var attrs = m[1];
+      if (m[0].charAt(1) === 'g' && m[0].charAt(2) !== '/') {
+        var gm = /\bfill="([^"]*)"/.exec(m[1] || '');
+        fillStack.push(gm ? gm[1].trim().toUpperCase() : null);
+        continue;
+      }
+      if (m[0].charAt(1) === '/') { fillStack.pop(); continue; }
+      var attrs = m[2] || '';
       var dm = /\bd="([^"]*)"/.exec(attrs);
       if (!dm) continue;
       var fm = /\bfill="([^"]*)"/.exec(attrs);
-      var hex = fm ? fm[1].trim().toUpperCase() : '#000000';
+      var hex = fm ? fm[1].trim().toUpperCase() : (inheritedFill() || '#000000');
+      if (hex.indexOf('none') === 0 || hex.indexOf('url(') === 0) continue;
       if (hex.charAt(0) !== '#') continue;
       if (hex.length === 4) hex = '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
       if (drop.indexOf(hex) >= 0) continue;
@@ -1742,6 +1888,9 @@
     removeSpecks: removeSpecks,
     buildSoft: buildSoft,
     resample: resample,
+    blurRGBA: blurRGBA,
+    denoiseRGBA: denoiseRGBA,
+    flatten: flatten,
     autoSupersample: autoSupersample,
     flattenToPalette: flattenToPalette,
     pickSentinel: pickSentinel,

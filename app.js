@@ -9,15 +9,46 @@
   var C = window.VectorCore;
   var $ = function (id) { return document.getElementById(id); };
 
+  /* VTracer 네이티브 옵션 묶음.
+     illustration·pixel·mono = 풀컬러(native), logo = 팔레트 정밀(palette). */
   var PRESETS = {
-    logo: { colors: 6, minArea: 2, simplify: 0.5 },
-    illustration: { colors: 12, minArea: 8, simplify: 1.2 },
-    light: { colors: 4, minArea: 24, simplify: 2.4 }
+    illustration: {
+      strategy: 'native', mode: 'spline', hierarchical: 'auto',
+      colorPrecision: 8, layerDifference: 8, maxColors: 0, colors: 6,
+      speckle: 0, simplify: 0.5, denoise: 0.8, supersample: 1, lengthThreshold: 1.6
+    },
+    logo: {
+      strategy: 'palette', mode: 'spline', hierarchical: 'auto',
+      colorPrecision: 8, layerDifference: 0, maxColors: 0, colors: 6,
+      speckle: 1, simplify: 0.5, denoise: 0, supersample: 'auto', lengthThreshold: 1.6
+    },
+    pixel: {
+      strategy: 'native', mode: 'pixel', hierarchical: 'auto',
+      colorPrecision: 8, layerDifference: 8, maxColors: 0, colors: 6,
+      speckle: 1, simplify: 0, denoise: 0, supersample: 1, lengthThreshold: 1.2
+    },
+    mono: {
+      strategy: 'native', clustering: 'bw', adaptive: true, mode: 'spline', hierarchical: 'auto',
+      colorPrecision: 8, layerDifference: 8, maxColors: 0, colors: 6,
+      speckle: 0, simplify: 0.5, denoise: 0.8, supersample: 'auto', lengthThreshold: 1.6
+    }
+  };
+
+  var PRESET_HINT = {
+    illustration: '풀컬러로 따서 그라데이션·작은 글씨·선을 살립니다. 복잡한 일러스트·UI 스크린샷에.',
+    logo: '팔레트를 6색으로 정리해 안티에일리어싱 잡색을 없앱니다. 로고·아이콘·워드마크에.',
+    pixel: '픽셀 격자를 그대로 직각 경로로 딴다. 픽셀아트·아이콘에 (색은 그대로).',
+    mono: '밝기로 흑백을 갈라 실루엣만 딴다. 도장·스캔·연필 드로잉에.',
+    custom: '직접 조정한 설정입니다. 모드를 다시 누르면 권장값으로 돌아갑니다.'
   };
 
   var DEFAULTS = {
-    colors: 6, bgMode: 'edges', bgTol: 30, minArea: 2, simplify: 0.5,
-    maxSide: 1200, digits: 2, cmyk: false, preset: 'logo', optSvg: true,
+    preset: 'illustration', strategy: 'native', mode: 'spline', hierarchical: 'auto',
+    clustering: 'color', adaptive: true,
+    colorPrecision: 8, layerDifference: 8, maxColors: 0, colors: 6,
+    speckle: 0, simplify: 0.5, denoise: 0.8, cornerThreshold: 60, lengthThreshold: 1.6,
+    supersample: 1, bgMode: 'edges', bgTol: 30,
+    maxSide: 1200, digits: 2, cmyk: false, optSvg: true,
     viewMode: 'side', zoom: 'fit', showPaths: false, plainBg: false
   };
 
@@ -54,12 +85,12 @@
   /* ── 저장/복원 ─────────────────────────────────────── */
   function load() {
     try {
-      var raw = localStorage.getItem('ovs.settings.v1');
-      if (raw) Object.assign(S.settings, JSON.parse(raw));
+      var raw = localStorage.getItem('ovs.settings.v2');
+      if (raw) { Object.assign(S.settings, JSON.parse(raw)); S.hadSaved = true; }
     } catch (e) { /* 저장소를 못 쓰는 환경 */ }
   }
   function save() {
-    try { localStorage.setItem('ovs.settings.v1', JSON.stringify(S.settings)); } catch (e) { /* noop */ }
+    try { localStorage.setItem('ovs.settings.v2', JSON.stringify(S.settings)); } catch (e) { /* noop */ }
   }
 
   /* ── UI 헬퍼 ───────────────────────────────────────── */
@@ -80,6 +111,11 @@
   function kb(n) {
     if (!n) return '–';
     return n < 1024 ? n + ' B' : (n / 1024).toFixed(n < 10240 ? 1 : 0) + ' KB';
+  }
+  /** 동적 문구 조각 번역 (영문 모드에서 한글이 남지 않게) */
+  function tr(s) {
+    var I = window.OneTapI18n;
+    return (I && I.t && I.lang === 'en') ? I.t(s) : s;
   }
 
   /* ── 이미지 로드 ───────────────────────────────────── */
@@ -139,12 +175,10 @@
   function loadSample(id, applyPreset) {
     var data = window.VectorSamples.imageData(id, 1000);
     var meta = window.VectorSamples.list.filter(function (x) { return x.id === id; })[0];
-    // 샘플을 '직접 고를 때만' 권장 색상 수를 적용한다 (새로고침 시 설정 보존)
+    // 샘플을 '직접 고를 때만' 권장 모드를 적용한다 (새로고침 시 설정 보존)
     if (meta && applyPreset !== false) {
-      S.settings.colors = meta.colors;
-      document.querySelectorAll('#colorChips .chip').forEach(function (x) {
-        x.classList.toggle('is-on', Number(x.dataset.colors) === Number(meta.colors));
-      });
+      applyPresetSettings(meta.preset || (meta.colors <= 4 ? 'logo' : 'illustration'));
+      syncControls();
       save();
     }
     acceptImageData(data, id + '.png', id);
@@ -176,11 +210,23 @@
     var res;
     try {
       var opts = {
-        colors: st.colors,
-        background: { mode: st.bgMode, tolerance: Number(st.bgTol) },
-        minArea: Number(st.minArea),
+        strategy: st.strategy === 'palette' ? 'palette' : 'native',
+        clustering: st.clustering === 'bw' ? 'bw' : 'color',
+        adaptive: st.adaptive !== false,
+        mode: st.mode || 'spline',
+        hierarchical: st.hierarchical || 'auto',
+        colorPrecision: Number(st.colorPrecision),
+        layerDifference: Number(st.layerDifference),
+        maxColors: Number(st.maxColors) || 0,
+        colors: Number(st.colors) || 6,
+        speckle: Number(st.speckle),
         simplify: Number(st.simplify),
-        cornerAngle: 72,
+        denoise: Number(st.denoise),
+        cornerThreshold: Number(st.cornerThreshold),
+        lengthThreshold: Number(st.lengthThreshold),
+        supersample: st.supersample,
+        background: { mode: st.bgMode, tolerance: Number(st.bgTol) },
+        minArea: Math.max(1, Number(st.speckle) * 2),
         digits: Number(st.digits),
         maxSide: Number(st.maxSide)
       };
@@ -226,7 +272,7 @@
     if (!O || S.settings.optSvg === false) {
       S.out.svg = raw;
       S.optStats = null;
-      if (note) note.textContent = '경량화를 끄면 VTracer 결과를 그대로 내보냅니다.';
+      if (note) note.textContent = tr('경량화를 끄면 VTracer 결과를 그대로 내보냅니다.');
       return null;
     }
     var r;
@@ -240,17 +286,17 @@
     } catch (err) {
       S.out.svg = raw;
       S.optStats = null;
-      if (note) note.textContent = '경량화를 건너뛰고 원본 SVG로 내보냅니다.';
+      if (note) note.textContent = tr('경량화를 건너뛰고 원본 SVG로 내보냅니다.');
       return null;
     }
     S.out.svg = r.svg;
     S.optStats = r.stats;
     if (note) {
       var st = r.stats;
-      var merged = st.merged ? (' · path ' + st.merged + '개 병합') : '';
+      var merged = st.merged ? (' · path ' + st.merged + tr('개 병합')) : '';
       note.innerHTML = st.saved > 0
-        ? ('<b>' + kb(st.before) + ' → ' + kb(st.after) + '</b> (' + st.savedPct + '%↓) · 레이어 ' + st.layers + '개' + merged + '. 모양은 그대로입니다.')
-        : ('이미 최소 상태입니다 · ' + kb(st.after) + ' · 레이어 ' + st.layers + '개');
+        ? ('<b>' + kb(st.before) + ' → ' + kb(st.after) + '</b> (' + st.savedPct + '%↓) · ' + tr('레이어') + ' ' + st.layers + tr('개') + merged + '. ' + tr('모양은 그대로입니다.'))
+        : (tr('이미 최소 상태입니다') + ' · ' + kb(st.after) + ' · ' + tr('레이어') + ' ' + st.layers + tr('개'));
     }
     return r;
   }
@@ -344,13 +390,18 @@
     var eb = $('engineBadge');
     if (eb) {
       var vt = r.engine === 'vtracer';
+      var modeName = tr(r.stats.clustering === 'bw' ? '흑백' : (r.stats.mode === 'pixel' ? '픽셀' : (r.stats.mode === 'polygon' ? '직선' : '곡선')));
+      var colorInfo = r.strategy === 'palette'
+        ? tr('팔레트') + ' ' + r.stats.maxColors + tr('색')
+        : (r.stats.maxColors ? tr('최대') + ' ' + r.stats.maxColors + tr('색') : tr('풀컬러'));
       eb.textContent = vt
-        ? '정밀 엔진 · VTracer WASM' + (r.stats.supersample > 1 ? ' · ' + r.stats.supersample + '× 슈퍼샘플' : '')
-        : (r.fallback === 'vtracer-complex' ? '자체 엔진 · 복잡도 자동 전환' : '자체 엔진' + (r.supersample > 1 ? ' · ' + r.supersample + '×' : ''));
+        ? 'VTracer WASM · ' + modeName + ' · ' + colorInfo +
+          (r.stats.supersample > 1 ? ' · ' + r.stats.supersample + '× ' + tr('슈퍼샘플') : '')
+        : (r.fallback === 'vtracer-complex' ? tr('자체 엔진 · 복잡도 자동 전환') : tr('자체 엔진') + (r.supersample > 1 ? ' · ' + r.supersample + '×' : ''));
       eb.className = 'engine-badge' + (vt ? ' is-precise' : '');
       eb.title = vt
-        ? 'VTracer ' + (r.engineVersion || '') + ' (MIT OR Apache-2.0) — 브라우저 안에서만 실행'
-        : '내장 베지어 엔진 — 같은 브라우저 안에서 실행';
+        ? 'VTracer ' + (r.engineVersion || '') + ' (MIT OR Apache-2.0) — ' + tr('브라우저 안에서만 실행')
+        : tr('내장 베지어 엔진 — 같은 브라우저 안에서 실행');
     }
   }
 
@@ -363,12 +414,21 @@
 
   function renderPalette() {
     if (!S.result) return;
-    var seen = {}, html = '';
+    // 풀컬러 결과는 색이 수천 개 — 면적 큰 순으로 24개만 보여 주고 나머지는 +N
+    var byColor = {};
     S.result.layers.forEach(function (L) {
-      if (seen[L.hex]) return;                      // 같은 색은 한 번만 (레이어는 도형 단위)
-      seen[L.hex] = 1;
-      html += '<span class="sw" style="background:' + L.hex + '" title="' + L.hex + ' · ' + L.anchors + ' 노드"></span>';
+      var e = byColor[L.hex] || (byColor[L.hex] = { hex: L.hex, area: 0, anchors: 0 });
+      e.area += L.area; e.anchors += L.anchors;
     });
+    var list = Object.keys(byColor).map(function (k) { return byColor[k]; });
+    list.sort(function (a, b) { return b.area - a.area; });
+    var html = '', shown = Math.min(list.length, 24);
+    for (var i = 0; i < shown; i++) {
+      html += '<span class="sw" style="background:' + list[i].hex + '" title="' + list[i].hex + ' · ' + list[i].anchors + ' ' + tr('노드') + '"></span>';
+    }
+    if (list.length > shown) {
+      html += '<span class="sw sw-more" title="' + tr('나머지') + ' ' + (list.length - shown) + tr('색') + '">+' + (list.length - shown) + '</span>';
+    }
     $('palette').innerHTML = html;
     $('palette2').innerHTML = html;
   }
@@ -379,20 +439,23 @@
     var r = S.result;
     var lines = [];
     lines.push('<b>' + (S.sourceName || 'image') + '</b>');
-    lines.push('원본 ' + S.source.width + '×' + S.source.height + ' px');
+    lines.push(tr('원본') + ' ' + S.source.width + '×' + S.source.height + ' px');
     if (r) {
-      lines.push('작업 ' + r.width + '×' + r.height + ' px');
-      if (r.stats.removedBackground) lines.push('배경 ' + r.stats.removedBackground.toLocaleString() + ' px 제거');
-      lines.push('잡티 ' + r.stats.removedSpecks + '개 흡수');
+      lines.push(tr('작업') + ' ' + r.width + '×' + r.height + ' px' + (r.stats.supersample > 1 ? ' · ' + r.stats.supersample + '× ' + tr('슈퍼샘플') : ''));
+      if (r.stats.removedBackground) lines.push(tr('배경') + ' ' + r.stats.removedBackground.toLocaleString() + ' px ' + tr('제거'));
+      lines.push(r.strategy === 'palette'
+        ? (tr('팔레트') + ' ' + r.stats.maxColors + tr('색') + ' · ' + tr('잡티') + ' ' + r.stats.removedSpecks + tr('개 흡수'))
+        : (tr('풀컬러') + ' · ' + tr('잡티 필터') + ' ' + r.stats.speckle + ' px' + (r.stats.autoNoise ? tr('(자동)') : '') + ' · ' + tr('잡음 제거') + ' ' + r.stats.denoise));
     }
     el.innerHTML = lines.join('<br>');
     var warn = '';
-    if (r && r.stats.anchors > 8000) warn = '노드가 많은 편입니다 — 곡선 단순화를 오른쪽으로 옮기면 가벼워집니다.';
-    else if (r && r.layers.length >= 10) warn = '색이 많아 파일이 커집니다. 인쇄용 로고라면 4~6색이 적당합니다.';
+    if (r && S.out.svg.length > 2 * 1024 * 1024) warn = tr('용량이 큽니다 — 색 단계·잡티 제거를 올리거나 작업 해상도를 낮추세요.');
+    else if (r && r.stats.anchors > 12000) warn = tr('노드가 많은 편입니다 — 곡선 단순화나 잡음 제거를 올리면 가벼워집니다.');
+    else if (r && r.stats.usedColors > 96) warn = r.stats.usedColors + tr('색이 넘습니다. 인쇄용 로고라면 로고 모드가 가볍습니다.');
     var uniq2 = {};
     if (r) for (var ci2 = 0; ci2 < r.layers.length; ci2++) uniq2[r.layers[ci2].hex] = 1;
     $('bgInfo').innerHTML = (r
-      ? '도형 ' + Object.keys(uniq2).length + '색 · 패스 ' + r.stats.loops + '개 · 앵커 ' + r.stats.anchors + '개'
+      ? tr('도형') + ' ' + Object.keys(uniq2).length + tr('색') + ' · ' + tr('패스') + ' ' + r.stats.loops + tr('개') + ' · ' + tr('앵커') + ' ' + r.stats.anchors + tr('개')
       : '') + (warn ? '<br><span style="color:var(--warn)">' + warn + '</span>' : '');
   }
 
@@ -521,26 +584,101 @@
   }
 
   /* ── 설정 위젯 ─────────────────────────────────────── */
+  /** 프리셋 적용 (모드 버튼·샘플 선택·초기화) */
+  function applyPresetSettings(name) {
+    var p = PRESETS[name];
+    if (!p) return;
+    S.settings.preset = name;
+    S.settings.clustering = name === 'mono' ? 'bw' : 'color';
+    Object.keys(p).forEach(function (k) { S.settings[k] = p[k]; });
+    if (p.strategy === 'palette') { S.settings.colors = p.colors || 6; S.settings.maxColors = 0; }
+    else { S.settings.maxColors = p.maxColors || 0; }
+  }
+
+  /** 프리셋별 색 수 칩: 팔레트 모드는 팔레트 색 수, 풀컬러는 상한 */
+  function renderColorChips() {
+    var st = S.settings;
+    var wrap = $('colorChips');
+    var paletteMode = st.strategy === 'palette';
+    var vals = paletteMode ? [2, 4, 6, 8, 12, 16, 24] : [0, 16, 32, 64, 128, 256];
+    var label = $('colorChipsLabel');
+    if (label) label.textContent = tr(paletteMode ? '팔레트 색 수' : '색 수 상한');
+    var on = paletteMode ? Number(st.colors) : Number(st.maxColors);
+    var html = '';
+    vals.forEach(function (v) {
+      var text = tr(v === 0 ? '무제한' : v + '색');
+      html += '<button type="button" class="chip' + (v === on ? ' is-on' : '') + '" data-colors="' + v + '">' + text + '</button>';
+    });
+    wrap.innerHTML = html;
+    Array.prototype.forEach.call(wrap.querySelectorAll('.chip'), function (b) {
+      b.addEventListener('click', function () {
+        var v = Number(b.dataset.colors);
+        if (S.settings.strategy === 'palette') S.settings.colors = v;
+        else S.settings.maxColors = v;
+        markCustom();
+        renderColorChips();
+        save();
+        schedule();
+      });
+    });
+  }
+
+  function markCustom() {
+    S.settings.preset = 'custom';
+    document.querySelectorAll('#presetSeg button').forEach(function (x) { x.classList.toggle('is-on', false); });
+    var hint = $('presetHint');
+    if (hint) hint.textContent = tr(PRESET_HINT.custom);
+  }
+
   function syncControls() {
     var st = S.settings;
     $('bgMode').value = st.bgMode;
     $('bgTol').value = st.bgTol;
     $('bgTolVal').textContent = st.bgTol;
-    $('minArea').value = st.minArea;
-    $('minAreaVal').textContent = st.minArea + ' px²';
+    if ($('speckle')) {
+      $('speckle').value = st.speckle;
+      $('speckleVal').textContent = st.speckle;
+    }
     $('simplify').value = st.simplify;
     $('simplifyVal').textContent = Number(st.simplify).toFixed(1);
+    if ($('denoise')) {
+      $('denoise').value = st.denoise;
+      $('denoiseVal').textContent = Number(st.denoise).toFixed(1);
+    }
+    if ($('colorPrecision')) {
+      $('colorPrecision').value = st.colorPrecision;
+      $('cpVal').textContent = st.colorPrecision;
+    }
+    if ($('layerDiff')) {
+      $('layerDiff').value = st.layerDifference;
+      $('ldVal').textContent = st.layerDifference;
+    }
+    if ($('corner')) {
+      $('corner').value = st.cornerThreshold;
+      $('cornerVal').textContent = st.cornerThreshold + '°';
+    }
+    if ($('lengthTh')) {
+      $('lengthTh').value = st.lengthThreshold;
+      $('lengthVal').textContent = Number(st.lengthThreshold).toFixed(1);
+    }
+    if ($('adaptive')) $('adaptive').checked = st.adaptive !== false;
     document.querySelectorAll('#presetSeg button').forEach(function (b) {
       b.classList.toggle('is-on', b.dataset.preset === st.preset);
+    });
+    var hint = $('presetHint');
+    if (hint) hint.textContent = tr(PRESET_HINT[st.preset] || PRESET_HINT.custom);
+    document.querySelectorAll('#pathMode button').forEach(function (b) {
+      b.classList.toggle('is-on', b.dataset.mode === st.mode);
     });
     $('maxSide').value = String(st.maxSide);
     $('cmyk').checked = !!st.cmyk;
     if ($('optSvg')) $('optSvg').checked = st.optSvg !== false;
     $('showPaths').checked = !!st.showPaths;
     $('plainBg').checked = !!st.plainBg;
-    document.querySelectorAll('#colorChips .chip').forEach(function (b) {
-      b.classList.toggle('is-on', Number(b.dataset.colors) === Number(st.colors));
-    });
+    renderColorChips();
+    // 팔레트 모드에서는 색 정밀도·색 단계가 VTracer 팔레트에 고정된다
+    var cpBlock = $('cpBlock');
+    if (cpBlock) cpBlock.style.display = st.strategy === 'palette' ? 'none' : '';
     document.querySelectorAll('#digitSeg button').forEach(function (b) {
       b.classList.toggle('is-on', Number(b.dataset.digits) === Number(st.digits));
     });
@@ -611,39 +749,64 @@
       S.settings.bgTol = Number(e.target.value); $('bgTolVal').textContent = e.target.value; save(); schedule();
     });
 
-    // 색상
-    document.querySelectorAll('#colorChips .chip').forEach(function (b) {
-      b.addEventListener('click', function () {
-        S.settings.preset = 'custom';
-        document.querySelectorAll('#presetSeg button').forEach(function (x) { x.classList.toggle('is-on', false); });
-        S.settings.colors = Number(b.dataset.colors);
-        document.querySelectorAll('#colorChips .chip').forEach(function (x) { x.classList.toggle('is-on', x === b); });
-        save(); schedule();
-      });
-    });
-
     // 잡티·정밀도
-    $('minArea').addEventListener('input', function (e) {
-      S.settings.preset = 'custom';
-      document.querySelectorAll('#presetSeg button').forEach(function (x) { x.classList.toggle('is-on', false); });
-      S.settings.minArea = Number(e.target.value);
-      $('minAreaVal').textContent = e.target.value + ' px²';
+    $('speckle').addEventListener('input', function (e) {
+      markCustom();
+      S.settings.speckle = Number(e.target.value);
+      $('speckleVal').textContent = e.target.value;
       save(); schedule();
+    });
+    $('denoise').addEventListener('input', function (e) {
+      markCustom();
+      S.settings.denoise = Number(e.target.value);
+      $('denoiseVal').textContent = Number(e.target.value).toFixed(1);
+      save(); schedule();
+    });
+    $('colorPrecision').addEventListener('input', function (e) {
+      markCustom();
+      S.settings.colorPrecision = Number(e.target.value);
+      $('cpVal').textContent = e.target.value;
+      save(); schedule();
+    });
+    $('layerDiff').addEventListener('input', function (e) {
+      markCustom();
+      S.settings.layerDifference = Number(e.target.value);
+      $('ldVal').textContent = e.target.value;
+      save(); schedule();
+    });
+    $('corner').addEventListener('input', function (e) {
+      markCustom();
+      S.settings.cornerThreshold = Number(e.target.value);
+      $('cornerVal').textContent = e.target.value + '°';
+      save(); schedule();
+    });
+    $('lengthTh').addEventListener('input', function (e) {
+      markCustom();
+      S.settings.lengthThreshold = Number(e.target.value);
+      $('lengthVal').textContent = Number(e.target.value).toFixed(1);
+      save(); schedule();
+    });
+    $('adaptive').addEventListener('change', function (e) {
+      S.settings.adaptive = e.target.checked; save(); schedule();
+    });
+    document.querySelectorAll('#pathMode button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        markCustom();
+        S.settings.mode = b.dataset.mode;
+        document.querySelectorAll('#pathMode button').forEach(function (x) { x.classList.toggle('is-on', x === b); });
+        save(); schedule(0);
+      });
     });
     document.querySelectorAll('#presetSeg button').forEach(function (b) {
       b.addEventListener('click', function () {
         var p = PRESETS[b.dataset.preset];
         if (!p) return;
-        S.settings.preset = b.dataset.preset;
-        S.settings.colors = p.colors;
-        S.settings.minArea = p.minArea;
-        S.settings.simplify = p.simplify;
+        applyPresetSettings(b.dataset.preset);
         save(); syncControls(); schedule(0);
       });
     });
     $('simplify').addEventListener('input', function (e) {
-      S.settings.preset = 'custom';
-      document.querySelectorAll('#presetSeg button').forEach(function (x) { x.classList.toggle('is-on', false); });
+      markCustom();
       S.settings.simplify = Number(e.target.value);
       $('simplifyVal').textContent = Number(e.target.value).toFixed(1);
       $('simplifyHint').innerHTML = Number(e.target.value) < 0.7
@@ -701,6 +864,19 @@
     });
   }
 
+  /* ── 언어 전환 — 동적으로 만든 문구를 다시 그린다 ───── */
+  document.addEventListener('onetap:langchange', function () {
+    if (!S.result) return;
+    try {
+      applySvgOptimize();
+      renderStats();
+      renderPalette();
+      renderSizes();
+      updateFileInfo();
+      syncControls();
+    } catch (e) { /* noop */ }
+  });
+
   /* ── 시작 ──────────────────────────────────────────── */
   function init() {
     var th = 'dark';
@@ -742,12 +918,8 @@
     settings: function () { return S.settings; },
     engine: function () { return S.result ? S.result.engine : null; },
     preset: function (name) {
-      var p = PRESETS[name];
-      if (!p) return;
-      S.settings.preset = name;
-      S.settings.colors = p.colors;
-      S.settings.minArea = p.minArea;
-      S.settings.simplify = p.simplify;
+      if (!PRESETS[name]) return;
+      applyPresetSettings(name);
       save(); syncControls(); schedule(0);
     },
     ready: true

@@ -12,10 +12,10 @@
   'use strict';
 
   var LIST = [
-    { id: 'emblem', name: '심플 엠블럼', colors: 2, note: '2색 · 또렷한 선' },
-    { id: 'badge', name: '다색 뱃지', colors: 6, note: '6색 · 면 분할' },
-    { id: 'mascot', name: 'AI 마스코트', colors: 12, note: '12색 · 잡티 포함' },
-    { id: 'wordmark', name: '미니 로고', colors: 4, note: '90×41px · 저해상도 글자', w: 90, h: 41 }
+    { id: 'emblem', name: '심플 엠블럼', colors: 2, preset: 'logo', note: '2색 · 또렷한 선' },
+    { id: 'badge', name: '다색 뱃지', colors: 6, preset: 'illustration', note: '6색 · 면 분할' },
+    { id: 'mascot', name: 'AI 마스코트', colors: 12, preset: 'illustration', note: '12색 · 잡티 포함' },
+    { id: 'wordmark', name: '미니 로고', colors: 4, preset: 'logo', note: '90×41px · 저해상도 글자', w: 90, h: 41 }
   ];
 
   /* ── 4. 미니 로고 (90×41px) ──────────────────────────

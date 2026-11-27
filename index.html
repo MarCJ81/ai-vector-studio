@@ -92,41 +92,77 @@
       </section>
 
       <section class="blk">
-        <h2><span>03</span>색상</h2>
-        <div class="chips" id="colorChips" role="group" aria-label="색상 수 프리셋">
-          <button class="chip" data-colors="2">2색</button>
-          <button class="chip" data-colors="4">4색</button>
-          <button class="chip is-on" data-colors="6">6색</button>
-          <button class="chip" data-colors="8">8색</button>
-          <button class="chip" data-colors="12">12색</button>
-          <button class="chip" data-colors="16">16색</button>
+        <h2><span>03</span>변환 모드</h2>
+        <div class="seg seg-wide mode-seg" id="presetSeg" role="group" aria-label="변환 모드">
+          <button type="button" data-preset="illustration" class="is-on">일러스트</button>
+          <button type="button" data-preset="logo">로고</button>
+          <button type="button" data-preset="pixel">픽셀</button>
+          <button type="button" data-preset="mono">흑백</button>
         </div>
-        <p class="hint" style="margin-top:7px">흑백 로고 <em>2색</em> · 심플 심볼 <em>4~6색</em> · 일러스트 <em>8~16색</em></p>
+        <p class="hint" id="presetHint" style="margin:7px 0 0">풀컬러로 따서 그라데이션·작은 글씨·선을 살립니다. 복잡한 일러스트·UI 스크린샷에.</p>
+      </section>
+
+      <section class="blk">
+        <h2><span>04</span>색상</h2>
+        <p class="chips-label" id="colorChipsLabel">색 수 상한</p>
+        <div class="chips" id="colorChips" role="group" aria-label="색 수">
+          <button class="chip is-on" data-colors="0">무제한</button>
+          <button class="chip" data-colors="16">16색</button>
+          <button class="chip" data-colors="32">32색</button>
+          <button class="chip" data-colors="64">64색</button>
+          <button class="chip" data-colors="128">128색</button>
+          <button class="chip" data-colors="256">256색</button>
+        </div>
+        <div id="cpBlock">
+          <div class="row" style="margin-top:12px"><span class="lab">색 정밀도</span><span class="val" id="cpVal">8</span></div>
+          <input type="range" id="colorPrecision" min="2" max="8" step="1" value="8" aria-label="색 정밀도" />
+          <p class="hint">높을수록 미세한 색 차이·그라데이션을 살립니다. 8 = 풀컬러.</p>
+          <div class="row"><span class="lab">색 단계</span><span class="val" id="ldVal">8</span></div>
+          <input type="range" id="layerDiff" min="0" max="64" step="2" value="8" aria-label="색 단계" />
+          <p class="hint">비슷한 색을 어디까지 구분할지. 높이면 가볍고, 낮추면 부드럽습니다.</p>
+        </div>
         <div class="swatches" id="palette" aria-label="추출된 팔레트"></div>
       </section>
 
       <section class="blk">
-        <h2><span>04</span>잡티 · 정밀도</h2>
-        <div class="seg seg-wide" id="presetSeg" role="group" aria-label="정밀도 프리셋">
-          <button type="button" data-preset="logo" class="is-on">정밀 로고</button>
-          <button type="button" data-preset="illustration">일러스트</button>
-          <button type="button" data-preset="light">경량</button>
-        </div>
-        <p class="hint" style="margin:7px 0 10px">작은 로고는 자동으로 2~8배 키워서 따고, 획이 뭉개지지 않게 잡티는 원본 크기 기준으로 지웁니다.</p>
-        <div class="row"><span class="lab">잡티 제거</span><span class="val" id="minAreaVal">2 px²</span></div>
-        <input type="range" id="minArea" min="0" max="60" step="1" value="2" aria-label="잡티 최소 면적" />
+        <h2><span>05</span>디테일 · 정리</h2>
+        <div class="row"><span class="lab">잡티 제거</span><span class="val" id="speckleVal">0</span></div>
+        <input type="range" id="speckle" min="0" max="24" step="1" value="0" aria-label="잡티 제거" />
         <div class="row"><span class="lab">곡선 단순화</span><span class="val" id="simplifyVal">0.5</span></div>
-        <input type="range" id="simplify" min="0.2" max="3" step="0.1" value="0.5" aria-label="단순화 강도" />
+        <input type="range" id="simplify" min="0" max="3" step="0.1" value="0.5" aria-label="곡선 단순화" />
         <p class="hint" id="simplifyHint">왼쪽은 초정밀, 오른쪽은 가벼움.</p>
-        <div class="row">
-          <span class="lab">작업 해상도</span>
-          <select id="maxSide" aria-label="작업 해상도">
-            <option value="1600">1600 px</option>
-            <option value="1200" selected>1200 px</option>
-            <option value="900">900 px</option>
-            <option value="700">700 px</option>
-          </select>
-        </div>
+        <div class="row"><span class="lab">잡음 제거</span><span class="val" id="denoiseVal">0.8</span></div>
+        <input type="range" id="denoise" min="0" max="3" step="0.1" value="0.8" aria-label="잡음 제거" />
+        <p class="hint">JPEG 잡티와 색 번짐을 지운 뒤 따서 선이 깨끗해집니다.</p>
+
+        <details class="adv" id="advBox">
+          <summary>고급 옵션</summary>
+          <div class="row" style="margin-top:10px">
+            <span class="lab">경로 모양</span>
+          </div>
+          <div class="seg seg-wide" id="pathMode" role="group" aria-label="경로 모양">
+            <button type="button" data-mode="spline" class="is-on">곡선</button>
+            <button type="button" data-mode="polygon">직선</button>
+            <button type="button" data-mode="pixel">픽셀</button>
+          </div>
+          <div class="row"><span class="lab">코너 임계</span><span class="val" id="cornerVal">60°</span></div>
+          <input type="range" id="corner" min="0" max="180" step="5" value="60" aria-label="코너 임계" />
+          <div class="row"><span class="lab">선 길이</span><span class="val" id="lengthVal">1.6</span></div>
+          <input type="range" id="lengthTh" min="0.5" max="8" step="0.1" value="1.6" aria-label="선 길이 임계" />
+          <div class="row">
+            <span class="lab">작업 해상도</span>
+            <select id="maxSide" aria-label="작업 해상도">
+              <option value="1600">1600 px</option>
+              <option value="1200" selected>1200 px</option>
+              <option value="900">900 px</option>
+              <option value="700">700 px</option>
+            </select>
+          </div>
+          <div class="opt-row">
+            <span class="lab">흑백 자동 기준</span>
+            <label class="toggle"><input type="checkbox" id="adaptive" checked /> 밝기 적응</label>
+          </div>
+        </details>
       </section>
     </aside>
 
@@ -186,7 +222,7 @@
     <!-- 우: 내보내기 -->
     <aside class="panel panel-out" aria-label="내보내기">
       <section class="blk">
-        <h2><span>05</span>내보내기</h2>
+        <h2><span>06</span>내보내기</h2>
         <div class="fmts" id="fmts">
           <button class="fmt is-primary" data-fmt="svg" type="button">
             <span class="tag">SVG</span>
@@ -234,7 +270,7 @@
       </section>
 
       <section class="blk">
-        <h2><span>06</span>현재 파일</h2>
+        <h2><span>07</span>현재 파일</h2>
         <div id="fileInfo" class="hint">아직 이미지가 없습니다.</div>
         <div class="swatches" id="palette2" style="margin-top:10px"></div>
         <p class="hint" style="margin-top:10px" id="bgInfo"></p>
@@ -254,18 +290,19 @@
 
     <h2>1 · 이 도구가 하는 일</h2>
     <p>래스터(PNG·JPG)를 <b>색 영역별 윤곽선</b>으로 바꾸고, 그 윤곽선을 <b>3차 베지어 곡선</b>으로 다시 그립니다. 결과는 픽셀이 아니라 수학이라, 명함이든 현수막이든 확대해도 계단이 생기지 않습니다.</p>
-    <p class="hint" style="margin-top:8px">윤곽 추적은 GitHub에서 가장 평판이 높은 오픈소스 벡터화 엔진 <b>VTracer</b>(visioncortex, MIT OR Apache-2.0)의 WebAssembly 빌드를 씁니다. 작은 로고는 2~8배로 키운 뒤 따고, 팔레트·배경 투명화·잡티 제거는 이 앱의 전처리가 맡습니다. 엔진은 브라우저 안에서만 돌고 외부로 아무것도 보내지 않습니다.</p>
+    <p class="hint" style="margin-top:8px">윤곽 추적과 색 클러스터링은 GitHub에서 가장 평판이 높은 오픈소스 벡터화 엔진 <b>VTracer</b>(visioncortex, ★7.6k, MIT OR Apache-2.0)의 WebAssembly 빌드가 맡습니다. 색을 몇 색으로 깎지 않고 <b>풀컬러 그대로</b> 딸 수 있어 그라데이션과 작은 글씨도 살아납니다. 엔진은 브라우저 안에서만 돌고 외부로 아무것도 보내지 않습니다.</p>
     <table class="tbl">
       <thead><tr><th>단계</th><th>내용</th></tr></thead>
       <tbody>
         <tr><td>배경</td><td>바깥에서 이어진 배경색만 투명으로. 안쪽 흰색은 보존.</td></tr>
-        <tr><td>색상</td><td>Median-Cut + K-means로 팔레트를 뽑고 픽셀을 배정.</td></tr>
-        <tr><td>잡티</td><td>지정 면적보다 작은 색 섬을 주변색에 흡수.</td></tr>
-        <tr><td>윤곽</td><td>안티에일리어싱 혼합비를 이용한 서브픽셀 등고선.</td></tr>
-        <tr><td>곡선</td><td>코너는 꺾고, 곡선 구간은 최소제곱 베지어로 피팅.</td></tr>
-        <tr><td>정리</td><td>Douglas–Peucker 단순화 + 좌표 반올림 + 색상별 패스 병합.</td></tr>
+        <tr><td>잡음 제거</td><td>가우시안 블러로 JPEG 잡티·색 번짐을 지운 뒤 추적.</td></tr>
+        <tr><td>색상</td><td>일러스트는 VTracer 풀컬러 클러스터링, 로고는 Median-Cut+K-means 팔레트.</td></tr>
+        <tr><td>잡티</td><td>지정 면적보다 작은 색 섬을 지우거나 주변색에 흡수.</td></tr>
+        <tr><td>윤곽</td><td>색 영역 경계 → 계층 추적 → 3차 베지어.</td></tr>
+        <tr><td>정리</td><td>곡선 단순화 + 좌표 반올림 + 색상별 패스 병합.</td></tr>
       </tbody>
     </table>
+    <p class="hint" style="margin-top:8px"><b>모드는 네 가지</b> — <b>일러스트</b>(풀컬러, 그라데이션·글씨 보존) · <b>로고</b>(팔레트 6색, 잉크처럼 깔끔) · <b>픽셀</b>(픽셀 격자 그대로) · <b>흑백</b>(밝기로 실루엣만).</p>
 
     <h2>2 · 포맷별 차이</h2>
     <table class="tbl">
@@ -281,10 +318,10 @@
 
     <h2>3 · 좋은 결과를 얻는 순서</h2>
     <ol>
-      <li><b>원본은 크게</b> — 1000px 이상으로 넣을수록 윤곽이 정확합니다. 작은 로고(100px 안팎)는 <b>정밀 로고</b> 프리셋이 자동으로 2~8배 슈퍼샘플링해 따냅니다.</li>
-      <li><b>색상 수를 줄여서 시작</b> — 로고라면 2~4색. 색이 많을수록 파일이 커지고 미세 잡티도 늘어납니다.</li>
+      <li><b>원본은 크게</b> — 1000px 이상으로 넣을수록 윤곽이 정확합니다. 작은 로고(100px 안팎)는 <b>로고</b> 모드가 자동으로 2~8배 슈퍼샘플링해 따냅니다.</li>
+      <li><b>모드부터 고르기</b> — 복잡한 일러스트·UI·사진은 <b>일러스트</b>, 평면 로고는 <b>로고</b>. 로고 모드는 팔레트를 6색으로 정리해 잉크처럼 깔끔합니다.</li>
       <li><b>배경을 먼저 지우기</b> — 배경이 남아 있으면 그 사각형까지 하나의 도형이 되어 용량을 잡아먹습니다.</li>
-      <li><b>잡티를 올려서 정리</b> — JPEG 압축 잡티가 많다면 10~20px²까지 올려 보세요.</li>
+      <li><b>잡음 제거를 올려서 정리</b> — JPEG로 저장한 이미지는 잡티가 많습니다. 1~2px면 글씨는 살고 얼룩만 사라집니다.</li>
       <li><b>곡선 단순화는 마지막에</b> — 200%로 확대해 원본과 비교하며, 눈에 띄지 않는 가장 큰 값에서 멈춥니다.</li>
     </ol>
 
@@ -300,8 +337,8 @@
     <h2>5 · 이런 경우엔 결과가 다릅니다</h2>
     <ul>
       <li><b>사진</b> — 사진은 벡터화해도 사진처럼 보이지 않습니다. 색면 일러스트로 바뀝니다.</li>
-      <li><b>그라데이션</b> — 색 단계로 근사합니다. 부드러운 그라데이션은 띠가 보일 수 있습니다.</li>
-      <li><b>아주 작은 글자</b> — 정밀 로고 프리셋은 90×41px 같은 로고 글자도 읽히게 살립니다. 다만 6px 이하 획은 원본에 정보가 없으므로 일러스트레이터에서 다시 입력하는 편이 좋습니다.</li>
+      <li><b>그라데이션</b> — 일러스트 모드는 색 단계(기본 8)로 근사합니다. 색 단계를 낮추면 더 부드럽고, 올리면 가벼워집니다.</li>
+      <li><b>아주 작은 글자</b> — 로고 모드는 90×41px 같은 로고 글자도 읽히게 살립니다. 다만 6px 이하 획은 원본에 정보가 없으므로 일러스트레이터에서 다시 입력하는 편이 좋습니다.</li>
       <li><b>반투명 그림자</b> — 불투명 색면으로 바뀝니다.</li>
     </ul>
 
